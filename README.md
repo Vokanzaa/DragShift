@@ -1,6 +1,6 @@
 # DragShift — local file tools
 
-## Custom Windows build 1.1.0+files.5
+## Custom Windows build 1.1.0+files.6
 
 This local extension is based on [llamaboi55/DragShift](https://github.com/llamaboi55/DragShift), upstream commit `88abe0cf392b80ad2db805ef12b020c76a6cf458` retrieved on 2026-10-19. It is not an official upstream release. The custom Windows package adds video, audio, experimental Datamosh and archive workflows to the original Shift-drag radial menu, with neutral matte glass.
 
@@ -20,8 +20,8 @@ Choose a format in **Convert**, or an operation in **Tools**. Editors open only 
 
 | Input | Output formats | Tools |
 |---|---|---|
-| Images: PNG, JPG/JPEG, WebP, HEIC/HEIF, AVIF, TIFF, BMP, GIF, ICO | PNG, JPG, WebP, HEIC, AVIF, TIFF, BMP, GIF, ICO, PDF | Compress, resize, crop, colour/light edits, annotate, redact, add background, view/remove metadata |
-| Video: MP4, MKV, MOV, AVI, WebM, M4V, WMV, FLV, TS/MTS/M2TS, MPEG/MPG, 3GP, OGV, VOB | MP4, MKV, MOV, WebM, AVI, animated GIF, MP3, WAV | Trim, compress, resize, crop/rotate/mirror, speed, colour, mute, PNG frame, metadata, Datamosh, Audio extraction |
+| Images: PNG, JPG/JPEG, WebP, HEIC/HEIF, AVIF, TIFF, BMP, GIF, ICO | PNG, JPG, WebP, HEIC, AVIF, TIFF, BMP, GIF, ICO, PDF | Compress, resize, crop, colour/light edits, annotate, redact, add background, view/remove metadata, Liquid Rescale distortion |
+| Video: MP4, MKV, MOV, AVI, WebM, M4V, WMV, FLV, TS/MTS/M2TS, MPEG/MPG, 3GP, OGV, VOB | MP4, MKV, MOV, WebM, AVI, animated GIF, MP3, WAV | Trim, compress, resize, crop/rotate/mirror, speed, colour, mute, PNG frame, metadata, Datamosh, Liquid Rescale distortion, Audio extraction |
 | Audio: MP3, WAV, FLAC, M4A/M4B, AAC, OGG/OGA, Opus, AIFF/AIF, WMA, APE, ALAC, AMR | MP3, WAV, FLAC, M4A, AAC, OGG, Opus, AIFF | Trim, edit, normalize, fade, compress, reverse, metadata |
 | Archives: ZIP, 7Z, RAR, TAR | ZIP, 7Z, TAR | Contents, extract into a new folder |
 | PDF | JPG/PNG per page, DOCX, TXT | Compress, split, rotate, merge, password protection, extract images, metadata |
@@ -49,6 +49,14 @@ For a classic Melt transition or an ordered video series:
 5. **Render preview** exports the same timeline and curve at 480 px. Open it from the result notification. **Create Melt video** saves the selected full-resolution result as MP4.
 
 Each bridge uses FFglitch motion-vector editing and I-frame removal, then recovers clean footage. A final FFmpeg pass produces a playable H.264 MP4. Removed frames are compensated at their original timeline positions so later cuts and sound stay aligned. Audio segments are joined; silence fills missing tracks. Datamosh is experimental: motion-rich clips tend to produce stronger artifacts, and source material affects every result.
+
+### Liquid Rescale distortion
+
+Choose **Tools → Distort** on a GIF, video or still image. The engine uses ImageMagick with liblqr: content-aware shrink followed by ordinary resize back to the processing canvas, as documented by [OpenDistortBot](https://github.com/rupansh/OpenDistortBot), which credits the author of @DistortBot. No bot source code was copied. The default intensity **40** corresponds to its documented **60×60%** shrink. Zero is unchanged; 95 is the strongest setting. A synthetic frame is pixel-identical to the reference ImageMagick command; the current hosted bot's version/settings are not public, so exact equivalence with that service is not established.
+
+Adjust intensity by slider or keyboard, scrub to a frame, compare the original, and select the output size (longest edge 64–1920 px, default 640, no upscale). Preview and export use the same processing canvas and effect. Choose **PNG** for the selected frame, or **GIF / MP4 / WebM** for the selected segment using numeric in/out fields or range handles. GIF input frames retain their delays and loop count; video-to-GIF delays are rounded cumulatively to its centisecond timebase. WebM and PNG retain alpha, GIF retains binary transparency, and MP4 uses opaque video. Video audio is retained in MP4/WebM. Each frame is distorted independently, so animated distortion can flicker as its content changes.
+
+Drop media into the tool to replace its source. Batch settings use each file's full duration when the range is unchanged, otherwise the same time range is applied to every source. Processing is local and cancellable, uses temporary decoded PNG frames, checks disk space, and publishes unique results only on success. The limit is 15,000 frames (GIF rendering also has a 200-million-pixel memory limit); shorten a long segment or lower its output size. The Windows installer includes the engine; source-only builds need ImageMagick 7 with the **lqr** delegate.
 
 ### Telegram custom emoji
 
@@ -91,9 +99,9 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m dragshift
 ```
 
-Place FFmpeg/FFprobe, FFglitch 0.10.2 (`ffgac` and `ffedit`), and 7-Zip in `bin/`, with their notices. For a Windows 7-Zip sidecar, keep `7z.dll` beside `7z.exe`. Source archives omit these engine binaries; obtain them separately from the sources below.
+Place FFmpeg/FFprobe, FFglitch 0.10.2 (`ffgac` and `ffedit`), 7-Zip, and ImageMagick 7 (`magick`, built with `lqr`) in `bin/`, with their notices. For a Windows 7-Zip sidecar, keep `7z.dll` beside `7z.exe`. Source archives omit these engine binaries; obtain them separately from the sources below.
 
-Engine discovery accepts `DRAGSHIFT_FFMPEG`, `DRAGSHIFT_FFPROBE`, `DRAGSHIFT_FFGAC`, `DRAGSHIFT_FFEDIT` and `DRAGSHIFT_7Z`, then bundled `bin/` and PATH. The archive engine also checks an existing `C:\Program Files\7-Zip\7z.exe` installation.
+Engine discovery accepts `DRAGSHIFT_FFMPEG`, `DRAGSHIFT_FFPROBE`, `DRAGSHIFT_FFGAC`, `DRAGSHIFT_FFEDIT`, `DRAGSHIFT_7Z` and `DRAGSHIFT_MAGICK`, then bundled `bin/` and PATH. The archive engine also checks an existing `C:\Program Files\7-Zip\7z.exe` installation.
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest
@@ -113,4 +121,5 @@ Windows logs are written to `%LOCALAPPDATA%\DragShift\log.txt`. Settings are ava
 - [FFmpeg documentation](https://ffmpeg.org/documentation.html), [FFmpeg source](https://github.com/FFmpeg/FFmpeg), and [Gyan Windows builds](https://www.gyan.dev/ffmpeg/builds/).
 - [FFglitch documentation](https://ffglitch.org/), [FFglitch 0.10 source repository](https://github.com/ramiropolla/ffglitch-core/tree/ffedit-0.10), and [0.10.2 source archive](https://ffglitch.org/pub/src/ffglitch-0.10.2.tar.xz).
 - [7-Zip downloads](https://www.7-zip.org/), [7-Zip source](https://github.com/ip7z/7zip), and [license](https://www.7-zip.org/license.txt).
+- [ImageMagick](https://imagemagick.org/), [ImageMagick source](https://github.com/ImageMagick/ImageMagick), and [liblqr](https://github.com/ImageMagick/lqr).
 - Application source: upstream [MIT license](LICENSE). Bundled engines and Python dependencies retain their own licenses; see [THIRD_PARTY.md](THIRD_PARTY.md) before redistributing a package.

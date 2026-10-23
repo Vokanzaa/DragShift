@@ -7,7 +7,8 @@ from PyInstaller.utils.hooks import collect_all
 onefile = os.environ.get("ONEFILE") == "1"
 heif_datas, heif_bins, heif_hidden = collect_all("pillow_heif")
 engine_names = {"ffmpeg.exe", "ffprobe.exe", "ffgac.exe", "ffedit.exe", "7z.exe", "7z.dll",
-                "FFmpeg-LICENSE.txt", "FFglitch-readme.txt", "7-Zip-License.txt"}
+                "FFmpeg-LICENSE.txt", "FFglitch-readme.txt", "7-Zip-License.txt",
+                "magick.exe", "ImageMagick-LICENSE.txt", "ImageMagick-NOTICE.txt"}
 engine_datas = [(str(p), "bin") for p in Path("bin").glob("*") if p.name in engine_names]
 
 a = Analysis(

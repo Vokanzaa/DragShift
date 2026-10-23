@@ -45,6 +45,26 @@ creates RAR files.
 - Formats and downloads: https://www.7-zip.org/
 - License: https://www.7-zip.org/license.txt
 
+## ImageMagick / Liquid Rescale
+
+The Windows package includes **ImageMagick 7.1.2-34 Q16 x64** (2026-10-14),
+official portable static build with the built-in **lqr** delegate. The engine's
+LICENSE and NOTICE files are bundled beside `magick.exe`. Media is decoded by
+Pillow/FFmpeg; ImageMagick receives only generated PNG frames under a restrictive
+PNG-only policy with local memory/disk/thread/time limits.
+
+- Official download: https://imagemagick.org/download/
+- Tested package: https://github.com/ImageMagick/ImageMagick/releases/download/7.1.2-34/ImageMagick-7.1.2-34-portable-Q16-x64.7z
+- Package SHA-256: `52cc6a441c7884f5ff4274b410c9b90c4b7d54245dcdf4d32988bb4e4df4e5d1`
+- Source and license: https://github.com/ImageMagick/ImageMagick/tree/7.1.2-34
+- liblqr source (LGPL): https://github.com/ImageMagick/lqr
+- Original liblqr project: https://liblqr.wikidot.com/
+
+The independently implemented shrink/resize pipeline follows the documented
+ImageMagick command in https://github.com/rupansh/OpenDistortBot, which credits
+@Mezgrman, author of @DistortBot. No GPL bot application code is incorporated.
+The current hosted service's implementation/settings have not been verified.
+
 ## Python dependencies
 
 PySide6 / Qt (LGPLv3), PyMuPDF (AGPLv3), Pillow (HPND), pillow-heif, NumPy,
