@@ -190,7 +190,7 @@ class TrimRange(QWidget):
         self.setMinimumHeight(48)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setAccessibleName('Trim range · drag start and end handles; arrows adjust selected handle')
-        self.setToolTip('Drag either end. Arrow keys: 0.01 s; Shift + arrows: 0.1 s. Tab selects the other handle.')
+        self.setToolTip('Drag either end. Left/right: 0.01 s; Shift + arrows: 0.1 s. Up/down selects the other handle.')
 
     def set_values(self, start, end, duration=None):
         if duration is not None:
@@ -284,6 +284,9 @@ class StrengthCurve(QWidget):
 
     def mousePressEvent(self, event):
         self.index = self._near(event.position())
+        near = (self.position(self.points[self.index])-event.position()).manhattanLength() <= 16
+        if not near:
+            return  # A double-click in empty space must not move an endpoint first.
         self.selected.emit(self.index)
         self.setFocus()
         if event.button() == Qt.RightButton:
