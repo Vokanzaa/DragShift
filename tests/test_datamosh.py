@@ -35,7 +35,7 @@ def pair(tmp_path_factory):
     return a, b
 
 
-@pytest.mark.parametrize("preset", ["Melt", "Bloom", "Fluid", "Psychedelic"])
+@pytest.mark.parametrize("preset", ["Melt"])
 def test_real_ffglitch_transition(pair, preset):
     a, b = pair
     before = a.read_bytes(), b.read_bytes()
@@ -69,7 +69,7 @@ def test_bridge_is_glitched_and_then_recovers(pair):
     from PIL import Image, ImageChops, ImageStat
     a, b = pair
     out = datamosh.transition(a, b, tail=1, head=2, duration=.75, max_side=160,
-                              preset="Psychedelic", strength=80)[0]
+                              preset="Melt", strength=80)[0]
     def frame(path, at):
         return Image.open(io.BytesIO(video.preview_bytes(path, at, 160))).convert("RGB")
     def difference(x, y):
@@ -127,3 +127,32 @@ def test_anamorphic_second_clip_is_letterboxed(pair, tmp_path):
         image = image.convert("RGB")
         red_rows = [y for y in range(image.height) if image.getpixel((image.width // 2, y))[0] > 180]
         assert len(red_rows) == pytest.approx(60, abs=4)
+
+
+def test_melt_is_the_only_preset(pair):
+    assert datamosh.PRESETS == ['Melt']
+    with pytest.raises(UserError):
+        datamosh.transition(*pair, preset='Psychedelic')
+
+
+def test_series_preserves_all_clips_and_curve_controls_mix(pair):
+    import io
+    from PIL import Image, ImageChops, ImageStat
+    a,b=pair
+    before=a.read_bytes(),b.read_bytes()
+    clean=datamosh.sequence([a,b,a], duration=.5, max_side=160, curve=[(0,0),(1,0)])[0]
+    moshed=datamosh.sequence([a,b,a], duration=.5, max_side=160, curve=[(0,1),(1,1)])[0]
+    assert video.probe(moshed).duration==pytest.approx(9,abs=.1)
+    assert video.probe(moshed).has_audio
+    def frame(p,t):
+        return Image.open(io.BytesIO(video.preview_bytes(p,t,160))).convert('RGB')
+    def diff(x,y):
+        return sum(ImageStat.Stat(ImageChops.difference(x,y)).mean)/3
+    assert diff(frame(clean,3.2),frame(moshed,3.2))>12
+    assert diff(frame(clean,6.2),frame(moshed,6.2))>12
+    assert diff(frame(clean,7.5),frame(moshed,7.5))<10
+    shaped=datamosh.sequence([a,b,a],duration=.5,max_side=160,
+        curve=[(0,0),(.4,0),(.6,1),(1,1)])[0]
+    assert diff(frame(clean,3.2),frame(shaped,3.2))<5
+    assert diff(frame(clean,6.2),frame(shaped,6.2))>12
+    assert (a.read_bytes(),b.read_bytes())==before
