@@ -1,10 +1,12 @@
 """Small shared controls for precise media editing, local drops and timelines."""
+
+from .i18n import tr, tr_items
 from pathlib import Path
 import re
 
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
-from PySide6.QtWidgets import (QAbstractItemView, QDoubleSpinBox, QFileDialog, QHBoxLayout,
+from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDoubleSpinBox, QFileDialog, QHBoxLayout,
     QLabel, QListWidget, QPushButton, QSpinBox, QVBoxLayout, QWidget)
 
 from .theme import BORDER, MUTED, SELECTED, TEXT
@@ -23,10 +25,10 @@ def value_editor(slider, label='', fmt=str):
     value.setRange(slider.minimum(), slider.maximum())
     value.setValue(slider.value())
     value.setKeyboardTracking(False)
-    value.setAccessibleName(label or slider.accessibleName() or 'Value')
+    value.setAccessibleName(tr(label or slider.accessibleName() or 'Value'))
     value.setMinimumWidth(84)
     suffix = re.sub(r'^[+−\-]?\d+', '', fmt(slider.value()))
-    value.setSuffix(suffix)
+    value.setSuffix(tr(suffix))
     slider.valueChanged.connect(value.setValue)
     value.valueChanged.connect(slider.setValue)
     return value
@@ -36,13 +38,13 @@ class DropZone(QLabel):
     filesDropped = Signal(list)
 
     def __init__(self, text, accept=lambda path: True):
-        super().__init__(text)
+        super().__init__(tr(text))
         self.accept_file = accept
         self.setAcceptDrops(True)
         self.setAlignment(Qt.AlignCenter)
         self.setWordWrap(True)
         self.setMinimumHeight(75)
-        self.setAccessibleName(text)
+        self.setAccessibleName(tr(text))
         self._style(False)
 
     def _style(self, active):
@@ -87,7 +89,7 @@ class _SequenceList(QListWidget):
         self.setDragDropMode(QAbstractItemView.InternalMove)
         self.setDefaultDropAction(Qt.MoveAction)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.setAccessibleName('Clip order · drag to reorder; drop files to append')
+        self.setAccessibleName(tr('Clip order · drag to reorder; drop files to append'))
         self.setMinimumHeight(90)
         self.setMaximumHeight(155)
 
@@ -138,7 +140,7 @@ class FileSequence(QWidget):
         buttons = QHBoxLayout()
         for text, fn in [('Add files…', self.choose), ('↑', lambda: self.move(-1)),
                          ('↓', lambda: self.move(1)), ('Remove', self.remove)]:
-            b = QPushButton(text)
+            b = QPushButton(tr(text))
             b.clicked.connect(fn)
             buttons.addWidget(b)
         layout.addLayout(buttons)
@@ -154,13 +156,13 @@ class FileSequence(QWidget):
         for path in paths:
             if self.accept_file(Path(path)):
                 item = QListWidgetItem(Path(path).name)
-                item.setToolTip(str(path))
+                item.setToolTip(tr(str(path)))
                 item.setData(Qt.UserRole, str(path))
-                self.list.addItem(item)
+                self.list.addItem(tr(item))
         self.changed.emit(self.paths())
 
     def choose(self):
-        paths, _ = QFileDialog.getOpenFileNames(self, 'Add files', str(self.paths()[0].parent) if self.paths() else '', self.file_filter)
+        paths, _ = QFileDialog.getOpenFileNames(self, tr('Add files'), str(self.paths()[0].parent) if self.paths() else '', tr(self.file_filter))
         self.add(paths)
 
     def move(self, delta):
@@ -189,8 +191,8 @@ class TrimRange(QWidget):
         self.dragging = False
         self.setMinimumHeight(48)
         self.setFocusPolicy(Qt.StrongFocus)
-        self.setAccessibleName('Trim range · drag start and end handles; arrows adjust selected handle')
-        self.setToolTip('Drag either end. Left/right: 0.01 s; Shift + arrows: 0.1 s. Up/down selects the other handle.')
+        self.setAccessibleName(tr('Trim range · drag start and end handles; arrows adjust selected handle'))
+        self.setToolTip(tr('Drag either end. Left/right: 0.01 s; Shift + arrows: 0.1 s. Up/down selects the other handle.'))
 
     def set_values(self, start, end, duration=None):
         if duration is not None:
@@ -260,10 +262,11 @@ class StrengthCurve(QWidget):
         self.markers = []
         self.index = 0
         self.dragging = False
-        self.setMinimumHeight(135)
+        self.duration = None
+        self.setMinimumHeight(170)
         self.setFocusPolicy(Qt.StrongFocus)
-        self.setAccessibleName('Effect strength curve')
-        self.setToolTip('Double-click to add a point. Drag to shape strength. Right-click or Delete removes a point.')
+        self.setAccessibleName(tr('Effect strength curve'))
+        self.setToolTip(tr('Click to add a point. Drag a point up for more effect, down for less. Right-click or Delete removes it.'))
 
     def area(self):
         return QRectF(34, 12, max(1, self.width()-50), max(1, self.height()-38))
@@ -283,17 +286,21 @@ class StrengthCurve(QWidget):
         self.changed.emit(list(self.points))
 
     def mousePressEvent(self, event):
-        self.index = self._near(event.position())
-        near = (self.position(self.points[self.index])-event.position()).manhattanLength() <= 16
+        index = self._near(event.position())
+        offset = self.position(self.points[index])-event.position()
+        near = offset.x()**2+offset.y()**2 <= 18**2
         if not near:
-            return  # A double-click in empty space must not move an endpoint first.
+            if event.button()==Qt.LeftButton:
+                self.insert(event.position())
+                self.dragging=True
+            return
+        self.index = index
         self.selected.emit(self.index)
         self.setFocus()
         if event.button() == Qt.RightButton:
             self.remove()
         elif event.button() == Qt.LeftButton:
             self.dragging = True
-            self.mouseMoveEvent(event)
 
     def mouseMoveEvent(self, event):
         if self.dragging:
@@ -304,13 +311,18 @@ class StrengthCurve(QWidget):
         self.dragging = False
 
     def mouseDoubleClickEvent(self, event):
-        if len(self.points) >= 64:
+        if event.button()==Qt.LeftButton:
+            self.insert(event.position())
+
+    def insert(self,pos):
+        self.setFocus()
+        if len(self.points) >= 64 or not self.area().contains(pos):
             return
         r = self.area()
-        x = max(.001, min(.999, (event.position().x()-r.left())/r.width()))
+        x = max(.001, min(.999, (pos.x()-r.left())/r.width()))
         if any(abs(x-p[0]) < .005 for p in self.points):
             return
-        point = (x, max(0., min(1., (r.bottom()-event.position().y())/r.height())))
+        point = (x, max(0., min(1., (r.bottom()-pos.y())/r.height())))
         self.points.append(point)
         self.points.sort()
         self.index = self.points.index(point)
@@ -350,10 +362,14 @@ class StrengthCurve(QWidget):
             p.setPen(QPen(QColor(BORDER),1,Qt.DashLine))
             p.drawLine(QPointF(x,r.top()),QPointF(x,r.bottom()))
             p.setPen(QColor(MUTED))
-            p.drawText(QRectF(x+3,r.top()+2,25,18),Qt.AlignLeft,str(i+2))
-        p.drawText(QRectF(0, r.top()-7, 30, 18), Qt.AlignRight, '100%')
-        p.drawText(QRectF(0, r.bottom()-9, 30, 18), Qt.AlignRight, '0%')
-        p.drawText(QRectF(r.left(), r.bottom()+4, r.width(), 20), Qt.AlignCenter, 'Start                         Timeline                         End')
+            p.drawText(QRectF(x+3,r.top()+2,25,18),Qt.AlignLeft,tr(str(i+2)))
+        p.drawText(QRectF(0, r.top()-7, 30, 18), Qt.AlignRight, tr('100%'))
+        p.drawText(QRectF(0, r.bottom()-9, 30, 18), Qt.AlignRight, tr('0%'))
+        for value in (0,.5,1):
+            label=f'{value*self.duration:.1f} s' if self.duration else f'{value*100:g}%'
+            x=r.left()+value*r.width()
+            align=Qt.AlignLeft if value==0 else Qt.AlignRight if value==1 else Qt.AlignCenter
+            p.drawText(QRectF(x if value==0 else x-70 if value==1 else x-35,r.bottom()+4,70,20),align,tr(label))
         path = QPainterPath(self.position(self.points[0]))
         for point in self.points[1:]:
             path.lineTo(self.position(point))
@@ -373,17 +389,18 @@ class CurveEditor(QWidget):
         layout.addWidget(self.curve)
         row = QHBoxLayout()
         self.time, self.level = QDoubleSpinBox(), QDoubleSpinBox()
+        self.duration = 100.
         for spin, name in ((self.time, 'Curve point position'), (self.level, 'Curve point strength')):
             spin.setRange(0, 100)
             spin.setDecimals(1)
-            spin.setSuffix(' %')
+            spin.setSuffix(tr(' %'))
             spin.setKeyboardTracking(False)
-            spin.setAccessibleName(name)
-        row.addWidget(QLabel('Point'))
+            spin.setAccessibleName(tr(name))
+        row.addWidget(QLabel(tr('Point')))
         row.addWidget(self.time)
-        row.addWidget(QLabel('Strength'))
+        row.addWidget(QLabel(tr('Strength')))
         row.addWidget(self.level)
-        reset = QPushButton('Reset curve')
+        reset = QPushButton(tr('Reset curve'))
         reset.clicked.connect(self.reset)
         row.addWidget(reset)
         layout.addLayout(row)
@@ -397,13 +414,23 @@ class CurveEditor(QWidget):
         return list(self.curve.points)
 
     def typed(self):
-        self.curve.set_point(self.time.value()/100, self.level.value()/100)
+        self.curve.set_point(self.time.value()/self.duration, self.level.value()/100)
+
+    def set_duration(self,seconds):
+        self.duration=max(.001,seconds)
+        self.curve.duration=seconds
+        self.time.blockSignals(True)
+        self.time.setRange(0,self.duration)
+        self.time.setSuffix(tr(' s'))
+        self.time.blockSignals(False)
+        self.sync()
+        self.curve.update()
 
     def sync(self, *_):
         point = self.curve.points[self.curve.index]
-        for spin, value in ((self.time, point[0]), (self.level, point[1])):
+        for spin, value in ((self.time, point[0]*self.duration), (self.level, point[1]*100)):
             spin.blockSignals(True)
-            spin.setValue(value*100)
+            spin.setValue(value)
             spin.blockSignals(False)
         self.time.setEnabled(0 < self.curve.index < len(self.curve.points)-1)
 
@@ -412,3 +439,55 @@ class CurveEditor(QWidget):
         self.curve.index = 0
         self.curve.changed.emit(self.points())
         self.curve.update()
+
+
+class EffectEnvelope(QWidget):
+    """Simple time shapes first; drawing points is an optional advanced mode."""
+    def __init__(self):
+        super().__init__()
+        layout=QVBoxLayout(self)
+        layout.setContentsMargins(0,0,0,0)
+        row=QHBoxLayout()
+        row.addWidget(QLabel(tr('Effect over time')))
+        self.shape=QComboBox()
+        for name,key in [('Even throughout','constant'),('Gradually stronger','build'),
+                         ('Gradually weaker','fade'),('Burst in the middle','pulse'),('Custom points…','custom')]:
+            self.shape.addItem(tr(name),key)
+        self.shape.setAccessibleName(tr('Effect over time'))
+        row.addWidget(self.shape,1)
+        layout.addLayout(row)
+        self.hint=QLabel(tr('The intensity slider controls the amount of effect.'))
+        self.hint.setWordWrap(True)
+        self.hint.setObjectName('dim')
+        layout.addWidget(self.hint)
+        self.editor=CurveEditor()
+        self.curve=self.editor.curve
+        layout.addWidget(self.editor)
+        self.shape.currentIndexChanged.connect(self._shape_changed)
+        self._shape_changed()
+
+    def _shape_changed(self,*_):
+        key=self.shape.currentData()
+        self.editor.setVisible(key=='custom')
+        hints={'constant':'The same intensity throughout. No points to draw.',
+               'build':'Starts clean and gradually reaches the selected intensity.',
+               'fade':'Starts at the selected intensity and gradually becomes clean.',
+               'pulse':'Clean at both ends; strongest in the middle.',
+               'custom':'Click to add a point. Up = more effect, down = less. Drag to move; right-click to remove.'}
+        self.hint.setText(tr(hints[key]))
+        if key!='custom':
+            self.curve.points={'constant':[(0,1),(1,1)],'build':[(0,0),(1,1)],
+                               'fade':[(0,1),(1,0)],'pulse':[(0,0),(.5,1),(1,0)]}[key]
+            self.curve.index=0
+            self.editor.sync()
+            self.curve.update()
+
+    def points(self):
+        return self.editor.points()
+
+    def sync(self):
+        self.shape.setCurrentIndex(4)
+        self.editor.sync()
+
+    def set_duration(self,seconds):
+        self.editor.set_duration(seconds)

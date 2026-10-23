@@ -1,11 +1,29 @@
 """Frame-aware image exports. Pillow composites GIF disposal before each edit."""
 from pathlib import Path
+from functools import reduce
+from math import gcd,ceil
 
 from PIL import Image, ImageOps
 
 from .util import UserError, sibling
 
 ANIMATED_TARGETS = {'GIF', 'WEBP', 'PNG', 'TIFF', 'AVIF'}
+
+
+def timing_rate(durations):
+    """Smallest centisecond frame grid that retains every GIF frame boundary."""
+    ticks=[max(1,round(ms/10)) for ms in durations]
+    grid=100/reduce(gcd,ticks) if ticks else 30
+    return grid*max(1,ceil(30/grid))
+
+
+def gif_rate(src):
+    with Image.open(src) as image:
+        delays=[]
+        for index in range(image.n_frames):
+            image.seek(index)
+            delays.append(max(10,int(image.info.get('duration',100))))
+    return timing_rate(delays)
 
 
 def is_animated(src):

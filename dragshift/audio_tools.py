@@ -1,4 +1,6 @@
 """Small audio editors using FFmpeg; no separate editor application required."""
+
+from .i18n import tr, tr_items
 from pathlib import Path
 
 from PySide6.QtCore import QUrl
@@ -18,10 +20,10 @@ class AudioToolWindow(_AsyncTools):
         self.mode = mode
         self.source_kwargs = {'mode': mode}
         self.info = None
-        self.details = QLabel("Reading audio information…")
+        self.details = QLabel(tr("Reading audio information…"))
         self.details.setWordWrap(True)
         self.body.addWidget(self.details)
-        listen = QPushButton("Listen to original")
+        listen = QPushButton(tr("Listen to original"))
         listen.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.path))))
         self.body.addWidget(listen)
         self.form = QFormLayout()
@@ -34,34 +36,34 @@ class AudioToolWindow(_AsyncTools):
             self.volume = QDoubleSpinBox()
             self.volume.setStyleSheet(SPIN_STYLE)
             self.volume.setRange(-60, 24)
-            self.volume.setSuffix(" dB")
+            self.volume.setSuffix(tr(" dB"))
             self.speed = QDoubleSpinBox()
             self.speed.setStyleSheet(SPIN_STYLE)
             self.speed.setRange(.25, 4)
             self.speed.setSingleStep(.25)
             self.speed.setValue(1)
-            self.speed.setSuffix(" ×")
-            self.mono = QCheckBox("Convert to mono")
-            self.reverse = QCheckBox("Play in reverse")
-            self.normalize = QCheckBox("Normalize loudness · −16 LUFS / −1.5 dBTP")
+            self.speed.setSuffix(tr(" ×"))
+            self.mono = QCheckBox(tr("Convert to mono"))
+            self.reverse = QCheckBox(tr("Play in reverse"))
+            self.normalize = QCheckBox(tr("Normalize loudness · −16 LUFS / −1.5 dBTP"))
             _field(self.form, "&Volume", self.volume)
             _field(self.form, "&Speed (pitch preserved)", self.speed)
-            self.form.addRow("", self.mono)
-            self.form.addRow("", self.reverse)
-            self.form.addRow("", self.normalize)
+            self.form.addRow(tr(""), self.mono)
+            self.form.addRow(tr(""), self.reverse)
+            self.form.addRow(tr(""), self.normalize)
         if mode in ("Fade", "Edit"):
             self.fade_in, self.fade_out = _seconds(.5 if mode == "Fade" else 0), _seconds(.5 if mode == "Fade" else 0)
             _field(self.form, "Fade &in", self.fade_in)
             _field(self.form, "Fade &out", self.fade_out)
         if mode == "Normalize":
-            text = QLabel("Measure the selected audio, then normalize to −16 LUFS with a −1.5 dBTP peak limit.")
+            text = QLabel(tr("Measure the selected audio, then normalize to −16 LUFS with a −1.5 dBTP peak limit."))
             text.setWordWrap(True)
-            self.form.addRow(text)
+            self.form.addRow(tr(text))
         if mode == "Reverse":
-            text = QLabel("Create a new file that plays backwards.")
-            self.form.addRow(text)
+            text = QLabel(tr("Create a new file that plays backwards."))
+            self.form.addRow(tr(text))
         self.target = QComboBox()
-        self.target.addItems(audio.TARGETS)
+        self.target.addItems(tr_items(audio.TARGETS))
         current = self.path.suffix[1:].upper()
         current = {"AIF": "AIFF", "OGA": "OGG"}.get(current, current)
         self.target.setCurrentText(current if current in audio.TARGETS else "M4A")
@@ -70,13 +72,13 @@ class AudioToolWindow(_AsyncTools):
         _field(self.form, "Save &as", self.target)
         self.bitrate = QComboBox()
         for rate in (64, 96, 128, 160, 192, 256, 320):
-            self.bitrate.addItem(f"{rate} kb/s", rate)
+            self.bitrate.addItem(tr(f"{rate} kb/s"), rate)
         self.bitrate.setCurrentText("128 kb/s" if mode == "Compress" else "192 kb/s")
         _field(self.form, "Lossy audio &bitrate", self.bitrate)
         self.rate = QComboBox()
-        self.rate.addItem("Keep source rate", None)
+        self.rate.addItem(tr("Keep source rate"), None)
         for value in (16000, 22050, 32000, 44100, 48000, 96000):
-            self.rate.addItem(f"{value:,} Hz", value)
+            self.rate.addItem(tr(f"{value:,} Hz"), value)
         _field(self.form, "Sample &rate", self.rate)
         self.target.currentTextChanged.connect(self._format_changed)
         self.metadata = None
@@ -84,14 +86,14 @@ class AudioToolWindow(_AsyncTools):
             self.metadata = QPlainTextEdit()
             self.metadata.setReadOnly(True)
             self.metadata.setMaximumHeight(130)
-            self.form.addRow(self.metadata)
-        note = QLabel("Processing stays on this computer and saves a new file.\n"
-                      "WAV/AIFF/FLAC use lossless encoding. OGG uses VBR quality 5.")
+            self.form.addRow(tr(self.metadata))
+        note = QLabel(tr("Processing stays on this computer and saves a new file.\n"
+                      "WAV/AIFF/FLAC use lossless encoding. OGG uses VBR quality 5."))
         note.setWordWrap(True)
         note.setObjectName("dim")
         self.body.addWidget(_scroll_panel(self.form, note), 1)
         if len(self.paths) > 1:
-            hint = QLabel(f"The same settings apply to all {len(self.paths)} selected files.")
+            hint = QLabel(tr(f"The same settings apply to all {len(self.paths)} selected files."))
             hint.setWordWrap(True)
             self.body.addWidget(hint)
         self.body.addWidget(self.error)
@@ -106,8 +108,8 @@ class AudioToolWindow(_AsyncTools):
 
     def _loaded(self, info):
         self.info = info
-        self.details.setText(f"{video.time_text(info.duration)} · {info.codec.upper()} · "
-            f"{info.sample_rate:,} Hz · {info.channels} channel{'s' if info.channels != 1 else ''}")
+        self.details.setText(tr(f"{video.time_text(info.duration)} · {info.codec.upper()} · "
+            f"{info.sample_rate:,} Hz · {info.channels} channel{'s' if info.channels != 1 else ''}"))
         self.start_time.setMaximum(info.duration)
         self.end_time.setMaximum(info.duration)
         self.end_time.setValue(info.duration)
@@ -148,12 +150,12 @@ class AudioToolWindow(_AsyncTools):
         start = opts.get("start", 0.)
         end = self.info.duration if opts.get("end") is None else opts["end"]
         if end - start < .04:
-            self.error.setText("Choose a start before the end of the audio.")
+            self.error.setText(tr("Choose a start before the end of the audio."))
             self.start_time.setFocus()
             return False
         length = (end - start) / opts.get("speed", 1)
         if opts.get("fade_in", 0) + opts.get("fade_out", 0) > length:
-            self.error.setText("The combined fades must fit inside the processed audio duration.")
+            self.error.setText(tr("The combined fades must fit inside the processed audio duration."))
             self.fade_in.setFocus()
             return False
         return True
@@ -172,7 +174,7 @@ class AudioTransitionWindow(_AsyncTools):
         super().__init__('Audio transitions',paths,notify,(720,530))
         self.infos=[]
         self._generation=0
-        intro=QLabel('Blend the end of each sound into the beginning of the next. Drop files below and drag rows to set their order.')
+        intro=QLabel(tr('Blend the end of each sound into the beginning of the next. Drop files below and drag rows to set their order.'))
         intro.setWordWrap(True)
         self.body.addWidget(intro)
         self.sequence=FileSequence(paths,lambda p:category(p)=='audio',audio.AUDIO_FILTER)
@@ -186,7 +188,7 @@ class AudioTransitionWindow(_AsyncTools):
         self.duration.setMaximum(60)
         _field(form,'Transition at each cut',self.duration)
         self.target=QComboBox()
-        self.target.addItems(audio.TARGETS)
+        self.target.addItems(tr_items(audio.TARGETS))
         self.target.setCurrentText('M4A')
         _field(form,'Save as',self.target)
         self.body.addLayout(form)
@@ -211,7 +213,7 @@ class AudioTransitionWindow(_AsyncTools):
         self.primary_btn.setEnabled(False)
         self.error.clear()
         if not paths:
-            self.details.setText('Drop at least two audio files.')
+            self.details.setText(tr('Drop at least two audio files.'))
             return
         self.path=paths[0]
         def done(infos):
@@ -223,19 +225,19 @@ class AudioTransitionWindow(_AsyncTools):
             self.primary_btn.setEnabled(2<=len(paths)<=16)
             self.update_details()
         self.lookup(lambda:[audio.probe(p) for p in paths],done,
-                    lambda msg:self.error.setText(msg) if generation==self._generation else None)
+                    lambda msg:self.error.setText(tr(msg)) if generation==self._generation else None)
 
     def update_details(self,*_):
         if self.infos:
             length=sum(i.duration for i in self.infos)-self.duration.value()*(len(self.infos)-1)
-            self.details.setText(f'{len(self.infos)} clips → {video.time_text(length)} · stereo · overlapping crossfades')
+            self.details.setText(tr(f'{len(self.infos)} clips → {video.time_text(length)} · stereo · overlapping crossfades'))
 
     def save(self):
         if len(self.infos)<2:
             return
         duration=self.duration.value()
         if any(i.duration<=duration*(2 if 0<n<len(self.infos)-1 else 1)+.02 for n,i in enumerate(self.infos)):
-            self.error.setText('Shorten the crossfade: middle clips need room for two fades.')
+            self.error.setText(tr('Shorten the crossfade: middle clips need room for two fades.'))
             return
         paths,target=list(self.paths),self.target.currentText()
         self.run(lambda:audio.transition(paths,duration=duration,target=target),'Creating audio transitions…')

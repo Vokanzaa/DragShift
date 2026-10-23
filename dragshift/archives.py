@@ -39,7 +39,7 @@ def executable() -> str:
     roots.append(Path(__file__).resolve().parent.parent)
     suffix = ".exe" if os.name == "nt" else ""
     candidates = ([Path(override)] if override else [])
-    candidates += [root / "bin" / ("7z" + suffix) for root in roots]
+    candidates += [root / "bin" / (name + suffix) for root in roots for name in ("7z", "7zz")]
     candidates.append(Path(r"C:\Program Files\7-Zip\7z.exe"))
     for candidate in candidates:
         if candidate.is_file():

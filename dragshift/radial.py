@@ -4,6 +4,8 @@ The background is captured before opening and refracted in a worker. A light
 neutral tint keeps the labels readable while retaining the frosted lens edges."""
 from __future__ import annotations
 
+from .i18n import tr, tr_items
+
 import math
 import sys
 from dataclasses import dataclass
@@ -532,7 +534,7 @@ class RadialMenu(QWidget):
     def _text(p: QPainter, r: QRectF, text: str, col: QColor,
               flags=Qt.AlignCenter):
         p.setPen(col)
-        p.drawText(r, flags, text)
+        p.drawText(r, flags, tr(text))
 
     def _petal_label(self, p: QPainter, c: QPointF, it: Item, ang: float, r: float, fg: QColor):
         rad = math.radians(ang)

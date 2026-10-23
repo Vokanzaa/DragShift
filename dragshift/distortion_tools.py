@@ -1,4 +1,7 @@
 """Content-aware distortion inside the existing Shift+drag workflow."""
+
+from .i18n import tr, tr_items
+import io
 from PySide6.QtCore import Qt,QTimer
 from PySide6.QtWidgets import QCheckBox,QComboBox,QFormLayout,QHBoxLayout,QLabel,QSlider,QSpinBox
 
@@ -16,37 +19,38 @@ class DistortionWindow(_AsyncTools):
         self.info=None
         self._request=0
         self._preview_busy=False
-        self.details=QLabel('Reading media…')
+        self._source_cache=None
+        self.details=QLabel(tr('Reading media…'))
         self.details.setObjectName('dim')
         self.body.addWidget(self.details)
         self.preview=_preview_label()
-        self.preview.setAccessibleName('Distorted frame preview')
+        self.preview.setAccessibleName(tr('Distorted frame preview'))
         self.body.addWidget(self.preview)
         self.scrub=QSlider(Qt.Horizontal)
         self.scrub.setRange(0,1000)
-        self.scrub.setAccessibleName('Frame position')
+        self.scrub.setAccessibleName(tr('Frame position'))
         self.scrub.setEnabled(False)
         self.body.addWidget(self.scrub)
-        self.original=QCheckBox('Show original frame')
+        self.original=QCheckBox(tr('Show original frame'))
         self.body.addWidget(self.original)
         form=QFormLayout()
         form.setVerticalSpacing(10)
         self.strength=QSlider(Qt.Horizontal)
         self.strength.setRange(0,95)
         self.strength.setValue(40)
-        self.strength.setAccessibleName('Distortion intensity')
+        self.strength.setAccessibleName(tr('Distortion intensity'))
         self.strength_number=value_editor(self.strength,'Distortion intensity')
         row=QHBoxLayout()
         row.addWidget(self.strength,1)
         row.addWidget(self.strength_number)
-        form.addRow('Intensity',row)
+        form.addRow(tr('Intensity'),row)
         self.max_side=QSpinBox()
         self.max_side.setRange(64,1920)
         self.max_side.setValue(640)
-        self.max_side.setSuffix(' px')
+        self.max_side.setSuffix(tr(' px'))
         _field(form,'Longest edge (no upscale)',self.max_side)
         self.target=QComboBox()
-        self.target.addItems(distortion.TARGETS)
+        self.target.addItems(tr_items(distortion.TARGETS))
         _field(form,'Save as',self.target)
         self.at=_seconds()
         _field(form,'Frame position',self.at)
@@ -56,17 +60,17 @@ class DistortionWindow(_AsyncTools):
         for label,widget in [('Start',self.start),('End',self.end)]:
             _field(form,label,widget)
             self.segment_widgets.extend((form.labelForField(widget),widget))
-        form.addRow(self.trim_range)
+        form.addRow(tr(self.trim_range))
         self.segment_widgets.append(self.trim_range)
         self.body.addWidget(_scroll_panel(form),1)
-        note=QLabel('Liquid Rescale · 0 = original, 95 = strongest. Each frame is distorted separately. '
-                    'PNG saves the selected frame; other formats save the segment. Drop media here to replace it.')
+        note=QLabel(tr('Liquid Rescale · 0 = original, 95 = strongest. Each frame is distorted separately. '
+                    'PNG saves the selected frame; other formats save the segment. Drop media here to replace it.'))
         note.setObjectName('dim')
         note.setWordWrap(True)
         self.body.addWidget(note)
         if len(self.paths)>1:
-            batch=QLabel(f'Settings apply to all {len(self.paths)} files. Preview shows the first. '
-                        'An unchanged range processes each file in full.')
+            batch=QLabel(tr(f'Settings apply to all {len(self.paths)} files. Preview shows the first. '
+                        'An unchanged range processes each file in full.'))
             batch.setWordWrap(True)
             self.body.addWidget(batch)
         self.body.addWidget(self.error)
@@ -91,8 +95,8 @@ class DistortionWindow(_AsyncTools):
 
     def _loaded(self,info):
         self.info=info
-        self.details.setText(f'{info.width} × {info.height} · {video.time_text(info.duration)} · '
-                             f'{info.fps:.2f} fps' if info.animated else f'{info.width} × {info.height} · Still image')
+        self.details.setText(tr(f'{info.width} × {info.height} · {video.time_text(info.duration)} · '
+                             f'{info.fps:.2f} fps' if info.animated else f'{info.width} × {info.height} · Still image'))
         self.end.setMaximum(info.duration)
         self.start.setMaximum(max(0,info.duration-.02))
         self.end.setValue(info.duration)
@@ -108,7 +112,7 @@ class DistortionWindow(_AsyncTools):
         segment=bool(self.info and self.info.animated and self.target.currentText()!='PNG')
         for widget in self.segment_widgets:
             widget.setVisible(segment)
-        self.primary_btn.setText('Save PNG frame' if self.target.currentText()=='PNG' else f'Save {self.target.currentText()}')
+        self.primary_btn.setText(tr('Save PNG frame' if self.target.currentText()=='PNG' else f'Save {self.target.currentText()}'))
 
     def _sync_range(self,*_):
         if self.info:
@@ -149,13 +153,31 @@ class DistortionWindow(_AsyncTools):
             self._preview_busy=False
             if request==self._request:
                 if error:
-                    self.preview.setText(error)
+                    self.preview.setText(tr(error))
                 else:
                     _show_frame(self.preview,data)
             else:
                 self._preview_timer.start(0)
-        self.lookup(lambda:distortion.preview_bytes(path,at,strength=strength,max_side=size),
-                    lambda data:complete(data=data),lambda error:complete(error=error))
+        try:
+            stat=path.stat()
+        except OSError:
+            self._preview_busy=False
+            self.preview.setText(tr('The file was moved or deleted.'))
+            return
+        key=(at,size,stat.st_mtime_ns,stat.st_size)
+        cached=self._source_cache
+        info=self.info
+        def render():
+            frame=cached[1] if cached and cached[0]==key else distortion.source_frame(path,at,size,info=info)
+            result=distortion.distort_frame(frame,strength=strength,max_side=size)
+            data=io.BytesIO()
+            result.save(data,'PNG',compress_level=1)
+            return frame,data.getvalue()
+        def rendered(value):
+            frame,data=value
+            self._source_cache=(key,frame)
+            complete(data=data)
+        self.lookup(render,rendered,lambda error:complete(error=error))
 
     def save(self):
         if not self.info:
@@ -163,7 +185,7 @@ class DistortionWindow(_AsyncTools):
         start,end=self.start.value(),self.end.value()
         target=self.target.currentText()
         if target!='PNG' and end-start<.02:
-            self.error.setText('End must be after start.')
+            self.error.setText(tr('End must be after start.'))
             return
         # The default full range means each batch source's own complete duration.
         full=start==0 and abs(end-self.info.duration)<.001
@@ -178,7 +200,7 @@ class DistortionWindow(_AsyncTools):
             try:
                 self.notify('tool:Distort',paths,fn())
             except Exception as error:
-                self.error.setText(str(error))
+                self.error.setText(tr(str(error)))
                 return
         self.close()
 

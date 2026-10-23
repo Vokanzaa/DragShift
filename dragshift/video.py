@@ -135,7 +135,7 @@ def _number(value, default=0.) -> float:
 
 
 def probe(src) -> VideoInfo:
-    raw = capture([executable("ffprobe"), "-v", "error", "-show_format", "-show_streams", "-of", "json", str(local_file(src))])
+    raw = capture([executable("ffprobe"), "-v", "error", *input_options(src), "-show_format", "-show_streams", "-of", "json", str(local_file(src))])
     try:
         data = json.loads(raw)
         streams = data.get("streams", [])
@@ -229,6 +229,11 @@ def ffmpeg_args(name="ffmpeg") -> list[str]:
             "-progress", "pipe:1", "-stats_period", "0.25", "-filter_threads", "2"]
 
 
+def input_options(src):
+    # FFmpeg otherwise replaces sub-20 ms GIF delays with its 100 ms default.
+    return ['-min_delay','0'] if Path(src).suffix.lower()=='.gif' else []
+
+
 @contextlib.contextmanager
 def export_path(src, label: str = "", ext: str = ".mp4", *, directory: Path | None = None):
     if directory is None:
@@ -294,7 +299,7 @@ def convert_video(src, target: str) -> list[Path]:
     if audio_only and not info.has_audio:
         raise UserError("This video has no audio track to extract.")
     with export_path(src, ext="." + target.lower()) as (tmp, outs):
-        args = ffmpeg_args() + ["-i", str(local_file(src))]
+        args = ffmpeg_args() + [*input_options(src),"-i", str(local_file(src))]
         if target == "GIF":
             # Separate palette pass avoids buffering every decoded frame while
             # palettegen waits for EOF (unbounded RAM for long videos).
@@ -312,8 +317,12 @@ def convert_video(src, target: str) -> list[Path]:
             args += ["-map", "0:a:0", "-vn"]
             args += ["-c:a", "libmp3lame", "-q:a", "2"] if target == "MP3" else ["-c:a", "pcm_s16le"]
         else:
+            gif_filter=''
+            if Path(src).suffix.lower()=='.gif':
+                from .animation import gif_rate
+                gif_filter=f',fps={gif_rate(src):.8f}'
             args += ["-map", f"0:{info.video_index}", "-map", "0:a:0?", "-vf",
-                     square_pixels_filter() + (",fps=30" if Path(src).suffix.lower() == '.gif' else ''), *_video_codec(target)]
+                     square_pixels_filter() + gif_filter, *_video_codec(target)]
         if target != "GIF":
             args += [str(tmp)]
             run_process(args, info.duration, f"Converting to {target}…")
@@ -327,10 +336,14 @@ def validate_range(info: VideoInfo, start: float, end: float | None):
     return start, min(end, info.duration)
 
 
-def edit_filters(*, max_side=None, crop_ratio=None, rotation=0, flip=False,
+def edit_filters(*, max_side=None, crop_ratio=None, crop_box=None, output_size=None, rotation=0, flip=False,
                  brightness=0., contrast=1., saturation=1.):
     """One geometric/colour pipeline for both preview frames and saved movies."""
     vf = [square_pixels_filter()]
+    if crop_box is not None:
+        left,top,right,bottom=crop_box
+        vf.append(f"crop=w='max(2,round(iw*{right-left}))':h='max(2,round(ih*{bottom-top}))':"
+                  f"x='min(iw-out_w,round(iw*{left}))':y='min(ih-out_h,round(ih*{top}))':exact=1")
     if crop_ratio:
         vf.append(f"crop=w='trunc(min(iw,ih*{crop_ratio})/2)*2':h='trunc(min(ih,iw/{crop_ratio})/2)*2'")
     if rotation == 90:
@@ -341,6 +354,8 @@ def edit_filters(*, max_side=None, crop_ratio=None, rotation=0, flip=False,
         vf.append("transpose=2")
     if flip:
         vf.append("hflip")
+    if output_size is not None:
+        vf.append(f'scale={output_size[0]}:{output_size[1]}:flags=lanczos')
     if max_side:
         vf.append(f"scale=w='trunc(iw*min(1,{max_side}/max(iw,ih))/2)*2':h='trunc(ih*min(1,{max_side}/max(iw,ih))/2)*2'")
     else:
@@ -349,21 +364,22 @@ def edit_filters(*, max_side=None, crop_ratio=None, rotation=0, flip=False,
     return vf
 
 
-def transform(src, *, start=0., end=None, max_side=None, crf=23, crop_ratio=None,
+def transform(src, *, start=0., end=None, max_side=None, crf=23, crop_ratio=None, crop_box=None, output_size=None,
               rotation=0, flip=False, speed=1., brightness=0., contrast=1., saturation=1.,
               mute=False, strip_metadata=False, label="Edited") -> list[Path]:
     info = probe(src)
     start, end = validate_range(info, start, end)
+    validate_geometry(crop_box,output_size)
     if (not math.isfinite(speed) or not .25 <= speed <= 4 or rotation not in (0, 90, 180, 270)
             or not 16 <= crf <= 40 or (max_side is not None and not 16 <= max_side <= 7680)
             or not -.5 <= brightness <= .5 or not .1 <= contrast <= 3 or not 0 <= saturation <= 3
             or (crop_ratio is not None and not .1 <= crop_ratio <= 10)):
         raise UserError("Choose valid video settings (speed 0.25–4×, size 16–7680 px, rotation 0/90/180/270°).")
-    vf = edit_filters(max_side=max_side, crop_ratio=crop_ratio, rotation=rotation, flip=flip,
+    vf = edit_filters(max_side=max_side, crop_ratio=crop_ratio,crop_box=crop_box,output_size=output_size,rotation=rotation, flip=flip,
                       brightness=brightness, contrast=contrast, saturation=saturation)
     vf.append(f"setpts=(PTS-STARTPTS)/{speed}")
     with export_path(src, label) as (tmp, outs):
-        args = ffmpeg_args() + ["-ss", str(start), "-t", str(end - start), "-i", str(local_file(src)),
+        args = ffmpeg_args() + ["-ss", str(start), "-t", str(end - start), *input_options(src), "-i", str(local_file(src)),
                                 "-map", f"0:{info.video_index}", "-vf", ",".join(vf)]
         if mute:
             args += ["-an"]
@@ -387,14 +403,25 @@ def transform(src, *, start=0., end=None, max_side=None, crf=23, crop_ratio=None
     return outs
 
 
-def preview_bytes(src, at=0., max_side=720, *, crop_ratio=None, rotation=0, flip=False,
+def preview_bytes(src, at=0., max_side=720, *, crop_ratio=None,crop_box=None,output_size=None,rotation=0, flip=False,
                   brightness=0., contrast=1., saturation=1.) -> bytes:
     # Preview avoids a second probe; caller supplies a validated local file/time.
-    vf = ','.join(edit_filters(max_side=max_side, crop_ratio=crop_ratio, rotation=rotation, flip=flip,
+    validate_geometry(crop_box,output_size)
+    vf = ','.join(edit_filters(max_side=max_side, crop_ratio=crop_ratio,crop_box=crop_box,output_size=output_size,rotation=rotation, flip=flip,
                               brightness=brightness, contrast=contrast, saturation=saturation))
-    return capture([executable("ffmpeg"), "-v", "error", "-nostdin", "-ss", str(max(0., at)),
+    return capture([executable("ffmpeg"), "-v", "error", "-nostdin", "-ss", str(max(0., at)),*input_options(src),
                     "-i", str(local_file(src)), "-frames:v", "1", "-vf", vf,
                     "-f", "image2pipe", "-c:v", "png", "-threads", "1", "pipe:1"])
+
+
+def validate_geometry(crop_box=None,output_size=None):
+    if crop_box is not None:
+        if (len(crop_box)!=4 or any(not isinstance(v,(int,float)) or not math.isfinite(v) for v in crop_box)
+                or not 0<=crop_box[0]<crop_box[2]<=1 or not 0<=crop_box[1]<crop_box[3]<=1):
+            raise UserError('Choose a crop rectangle within the video frame.')
+    if output_size is not None and (len(output_size)!=2 or any(
+            isinstance(v,bool) or not isinstance(v,int) or not 16<=v<=7680 or v%2 for v in output_size)):
+        raise UserError('Choose even video dimensions from 16 to 7680 pixels.')
 
 
 def snapshot(src, at=0.) -> list[Path]:
@@ -402,7 +429,7 @@ def snapshot(src, at=0.) -> list[Path]:
     if not math.isfinite(at) or not 0 <= at < info.duration:
         raise UserError("Choose a frame time within the video.")
     with export_path(src, f"Frame {at:.2f}s", ".png") as (tmp, outs):
-        args = ffmpeg_args() + ["-ss", str(at), "-i", str(local_file(src)), "-map", f"0:{info.video_index}",
+        args = ffmpeg_args() + ["-ss", str(at), *input_options(src), "-i", str(local_file(src)), "-map", f"0:{info.video_index}",
                                 "-frames:v", "1", "-vf", square_pixels_filter(), "-threads", "1", str(tmp)]
         run_process(args, 0, "Saving frame…")
     return outs

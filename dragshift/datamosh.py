@@ -126,7 +126,7 @@ def sequence(paths, *, duration=2., strength=65, max_side=720, audio=True, fps=3
             inputs=[]
             graph=[]
             for i,(path,start,length,count) in enumerate(zip(paths,starts,lengths,counts)):
-                inputs += ['-ss',str(start),'-t',str(length),'-i',str(path)]
+                inputs += ['-ss',str(start),'-t',str(length),*video.input_options(path),'-i',str(path)]
                 graph.append(f'[{i}:v:0]{video.square_pixels_filter()},fps={fps},'
                     f'scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,'
                     f'setsar=1,format=yuv420p,tpad=stop_mode=clone:stop_duration=0.2,'

@@ -5,6 +5,8 @@ thumbnail, what changed (e.g. "2.4 MB → 610 KB · 75% smaller") and actions:
 Open · Show in folder · Undo (moves the new files to the Recycle Bin)."""
 from __future__ import annotations
 
+from .i18n import tr, tr_items
+
 import os
 import subprocess
 import sys
@@ -265,7 +267,7 @@ class ToastCard(QWidget):
             f.setBold(True)
             p.setFont(f)
             p.setPen(QColor(GOOD if self.state == "done" else ERROR if err else MUTED))
-            p.drawText(QRectF(lead.center().x() - 22, lead.center().y() - 22, 44, 44), Qt.AlignCenter, icon)
+            p.drawText(QRectF(lead.center().x() - 22, lead.center().y() - 22, 44, 44), Qt.AlignCenter, tr(icon))
             x = 82
 
         tw = W - x - 34
@@ -274,17 +276,17 @@ class ToastCard(QWidget):
         f.setBold(True)
         p.setFont(f)
         fm = QFontMetrics(f)
-        title = fm.elidedText(self.title, Qt.ElideRight, int(tw))
+        title = fm.elidedText(tr(self.title), Qt.ElideRight, int(tw))
         p.setPen(QColor(TEXT))
-        p.drawText(QRectF(x, 13, tw, 20), Qt.AlignLeft | Qt.AlignVCenter, title)
+        p.drawText(QRectF(x, 13, tw, 20), Qt.AlignLeft | Qt.AlignVCenter, tr(title))
         # highlighted figure chip (e.g. "75% smaller")
         if self.good:
-            gx = x + fm.horizontalAdvance(title) + 8
+            gx = x + fm.horizontalAdvance(tr(title)) + 8
             f2 = QFont(ui_family(False))
             f2.setPixelSize(11)
             f2.setBold(True)
             fm2 = QFontMetrics(f2)
-            gw = fm2.horizontalAdvance(self.good) + 14
+            gw = fm2.horizontalAdvance(tr(self.good)) + 14
             if gx + gw < W - 34:
                 chip = QRectF(gx, 14, gw, 18)
                 p.setPen(Qt.NoPen)
@@ -292,19 +294,19 @@ class ToastCard(QWidget):
                 p.drawRoundedRect(chip, 4, 4)
                 p.setFont(f2)
                 p.setPen(QColor(GOOD))
-                p.drawText(chip, Qt.AlignCenter, self.good)
+                p.drawText(chip, Qt.AlignCenter, tr(self.good))
         f.setPixelSize(12)
         f.setBold(False)
         p.setFont(f)
         p.setPen(QColor(MUTED))
         p.drawText(QRectF(x, 35, tw + 18, 34), Qt.AlignLeft | Qt.AlignTop | Qt.TextWordWrap,
-                   QFontMetrics(f).elidedText(self.detail, Qt.ElideMiddle, int(tw * 1.9)))
+                   tr(QFontMetrics(f).elidedText(tr(self.detail), Qt.ElideMiddle, int(tw * 1.9))))
 
         # close ×
         f.setPixelSize(13)
         p.setFont(f)
         p.setPen(QColor(MUTED))
-        p.drawText(QRectF(W - 30, 6, 24, 24), Qt.AlignCenter, "✕")
+        p.drawText(QRectF(W - 30, 6, 24, 24), Qt.AlignCenter, tr("✕"))
 
         # action buttons
         self.buttons = []
@@ -317,14 +319,14 @@ class ToastCard(QWidget):
             fm = QFontMetrics(f)
             bx = x
             for i, nme in enumerate(names):
-                bw = fm.horizontalAdvance(labels[nme]) + 22
+                bw = fm.horizontalAdvance(tr(labels[nme])) + 22
                 br = QRectF(bx, H - 32, bw, 22)
                 self.buttons.append((nme, br))
                 p.setPen(QPen(QColor(BORDER), 1))
                 p.setBrush(QColor(HOVER if self.hover_btn == i else PANEL))
                 p.drawRoundedRect(br, 5, 5)
                 p.setPen(QColor(TEXT))
-                p.drawText(br, Qt.AlignCenter, labels[nme])
+                p.drawText(br, Qt.AlignCenter, tr(labels[nme]))
                 bx += bw + 6
 
 

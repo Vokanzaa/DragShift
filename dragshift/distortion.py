@@ -9,6 +9,8 @@ import math
 import os
 import shutil
 import tempfile
+import threading
+from concurrent.futures import ThreadPoolExecutor,as_completed
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -86,16 +88,16 @@ def distort_frame(image,*,strength=40,max_side=640):
     with tempfile.TemporaryDirectory(prefix='dragshift-distort-frame-') as directory:
         folder=Path(directory)
         source,out=folder/'input.png',folder/'output.png'
-        frame.save(source,'PNG')
+        frame.save(source,'PNG',compress_level=1)
         args=[video.executable('magick'),str(source),*_arguments(*frame.size,strength),
-              '-define','png:color-type=6','PNG:'+str(out)]
+              '-define','png:color-type=6','-define','png:compression-level=1','PNG:'+str(out)]
         video.run_process(args,message='Distorting frame…',parse_progress=False,env=_environment(folder))
         with Image.open(out) as result:
             return result.convert('RGBA')
 
 
-def source_frame(src,at=0.,max_side=640):
-    info=probe(src)
+def source_frame(src,at=0.,max_side=640,*,info=None):
+    info=info or probe(src)
     if not math.isfinite(at) or not 0<=at<info.duration:
         raise UserError('Choose a frame within the source duration.')
     if info.image:
@@ -171,7 +173,7 @@ def _render(src,info,result,start,end,strength,max_side,target):
                     left,right=max(start,elapsed),min(end,elapsed+seconds)
                     if right>left:
                         frame=_resize(ImageOps.exif_transpose(source),max_side)
-                        frame.save(raw/f'frame{len(durations):08d}.png','PNG')
+                        frame.save(raw/f'frame{len(durations):08d}.png','PNG',compress_level=1)
                         durations.append(round((right-left)*1000))
                     elapsed+=seconds
                     if elapsed>=end:
@@ -182,7 +184,7 @@ def _render(src,info,result,start,end,strength,max_side,target):
             vf=video.square_pixels_filter()+f',scale={w}:{h},fps={fps:.8f},format=rgba'
             decoder=['-c:v','libvpx-vp9'] if info.codec=='vp9' else []
             video.run_process(video.ffmpeg_args()+['-ss',str(start),'-t',str(end-start),*decoder,'-i',str(video.local_file(src)),
-                '-map','0:v:0','-an','-vf',vf,'-frames:v',str(MAX_FRAMES+1),'-threads','1',str(raw/'frame%08d.png')],
+                '-map','0:v:0','-an','-vf',vf,'-frames:v',str(MAX_FRAMES+1),'-threads','1','-compression_level','1',str(raw/'frame%08d.png')],
                 end-start,'Decoding source frames…',0,.15)
             frames=sorted(raw.glob('frame*.png'))
             durations=[1000/fps]*len(frames)
@@ -191,18 +193,7 @@ def _render(src,info,result,start,end,strength,max_side,target):
         with Image.open(frames[0]) as first:
             w,h=first.size
         video.progress(.2,'Distorting frames…')
-        for index in range(0,len(frames),8):
-            video.check_cancel()
-            chunk=frames[index:index+8]
-            if strength==0:
-                for path in chunk:
-                    shutil.copy2(path,warped/path.name)
-            else:
-                args=[video.executable('magick'),'mogrify','-path',str(warped),*_arguments(w,h,strength),
-                      '-define','png:color-type=6',*[str(p) for p in chunk]]
-                video.run_process(args,message='Distorting frames…',offset=.2+.6*index/len(frames),span=0,
-                                  parse_progress=False,env=_environment(folder))
-            video.progress(.2+.6*min(index+8,len(frames))/len(frames),'Distorting frames…')
+        _warp_frames(frames,warped,folder,w,h,strength)
         outputs=[warped/path.name for path in frames]
         if any(not p.is_file() for p in outputs):
             raise UserError('The distortion engine did not write every frame.')
@@ -249,5 +240,49 @@ def _render(src,info,result,start,end,strength,max_side,target):
             codec=(['-c:v','libvpx-vp9','-pix_fmt','yuva420p','-b:v','0','-crf','32',
                     '-deadline','good','-cpu-used','4','-auto-alt-ref','0','-c:a','libopus']
                    if target=='WEBM' else video._video_codec(target))
-            args+=['-vf',vf,'-r',f'{info.fps:.8f}','-t',str(end-start),*codec,str(result)]
+            if info.image:
+                from .animation import timing_rate
+                rate=timing_rate(durations)
+                # Expand the concat frame durations before output -t sees EOF;
+                # output -r alone can truncate a long final still frame.
+                vf+=f',fps={rate:.8f}'
+            else:
+                rate=info.fps
+            args+=['-vf',vf,'-r',f'{rate:.8f}',*(['-fps_mode','cfr'] if info.image else []),'-t',str(end-start),*codec,str(result)]
             video.run_process(args,end-start,'Encoding distorted animation…',.8,.2)
+
+
+def _warp_frames(frames,warped,folder,w,h,strength):
+    """Independent exact liblqr jobs; bound CPU use and cancel all active engines."""
+    chunks=[frames[n:n+4] for n in range(0,len(frames),4)]
+    workers=min(4,max(1,(os.cpu_count() or 2)//2),len(chunks))
+    parent=video._control.get()
+    abort=threading.Event()
+    class Cancel:
+        def is_set(self):
+            return abort.is_set() or bool(parent and parent.cancel.is_set())
+    def run(chunk):
+        with video.job_context(video.Control(cancel=Cancel())):
+            video.check_cancel()
+            if strength==0:
+                for path in chunk:
+                    video.check_cancel()
+                    shutil.copy2(path,warped/path.name)
+            else:
+                args=[video.executable('magick'),'mogrify','-path',str(warped),*_arguments(w,h,strength),
+                      '-define','png:color-type=6','-define','png:compression-level=1',*[str(p) for p in chunk]]
+                env=_environment(folder)
+                env['MAGICK_THREAD_LIMIT']='1'
+                video.run_process(args,message='Distorting frames…',parse_progress=False,env=env)
+        return len(chunk)
+    pool=ThreadPoolExecutor(max_workers=workers,thread_name_prefix='distort')
+    futures=[pool.submit(run,chunk) for chunk in chunks]
+    completed=0
+    try:
+        for future in as_completed(futures):
+            video.check_cancel()
+            completed+=future.result()
+            video.progress(.2+.6*completed/len(frames),'Distorting frames…')
+    finally:
+        abort.set()
+        pool.shutdown(wait=True,cancel_futures=True)

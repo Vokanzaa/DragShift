@@ -1,6 +1,8 @@
 """Quiet frosted windows and the image view shared by all editors."""
 from __future__ import annotations
 
+from .i18n import tr, tr_items
+
 import sys
 
 from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, Signal
@@ -18,7 +20,7 @@ class GlassWindow(QWidget):
 
     def __init__(self, title: str, parent=None, size=(760, 640)):
         super().__init__(parent)
-        self.setWindowTitle(f"{title} — DragShift")
+        self.setWindowTitle(tr(f"{title} — DragShift"))
         self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_DeleteOnClose)
@@ -37,14 +39,14 @@ class GlassWindow(QWidget):
         outer.setSpacing(12)
 
         bar = QHBoxLayout()
-        self.title_label = QLabel(title)
+        self.title_label = QLabel(tr(title))
         self.title_label.setObjectName("title")
         bar.addWidget(self.title_label)
         bar.addStretch(1)
-        close = QPushButton("×")
+        close = QPushButton(tr("×"))
         close.setObjectName("chrome")
-        close.setAccessibleName("Close")
-        close.setToolTip("Close (Esc)")
+        close.setAccessibleName(tr("Close"))
+        close.setToolTip(tr("Close (Esc)"))
         close.clicked.connect(self.close)
         bar.addWidget(close)
         outer.addLayout(bar)

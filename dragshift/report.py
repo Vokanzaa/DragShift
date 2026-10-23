@@ -89,7 +89,7 @@ def summarize(action: str, srcs: list, outs: list, extra: str = "") -> Result:
         else:
             title = {"Trim": "Audio trimmed", "Edit": "Audio edited", "Normalize": "Audio normalized",
                      "Fade": "Audio fades added", "Compress": "Audio compressed", "Reverse": "Audio reversed",
-                     "Metadata": "Audio metadata removed", "Extract": "Audio extracted"}.get(name, name)
+                     "Metadata": "Audio metadata removed", "Extract": "Audio extracted", "Audio glitch":"Audio glitched"}.get(name, name)
         bits = [o0.name]
         if info:
             bits += [video.time_text(info.duration), f"{info.sample_rate:,} Hz", f"{info.channels} ch"]

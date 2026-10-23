@@ -24,14 +24,18 @@ def selftest():
             info = video.probe(edited)
             assert (info.width, info.height) == (60, 80) and .6 < info.duration < .95
             assert video.snapshot(a, .5)[0].is_file()
+            resized = video.transform(a,crop_box=(.125,0,.875,1),output_size=(80,80))[0]
+            info = video.probe(resized)
+            assert (info.width,info.height)==(80,80) and info.has_audio
             for preset in datamosh.PRESETS:
                 out = datamosh.transition(a, b, tail=.5, head=1.5, duration=.5, max_side=160, preset=preset)[0]
                 info = video.probe(out)
                 assert abs(info.duration - 2) < .15 and info.has_audio
             series=datamosh.sequence([a,b,a],duration=.5,max_side=160,curve=[(0,0),(.3,0),(.6,1),(1,1)])[0]
             assert abs(video.probe(series).duration-6)<.15
-            from .video_tools import DatamoshWindow, VideoToolWindow
-            windows = [DatamoshWindow([str(a), str(b)], lambda *_: None), VideoToolWindow([str(a)], lambda *_: None)]
+            from .video_tools import DatamoshWindow
+            from .video_geometry import VideoResizeWindow
+            windows = [DatamoshWindow([str(a), str(b)], lambda *_: None), VideoResizeWindow([str(a)], lambda *_: None)]
             deadline = time.monotonic() + 15
             while time.monotonic() < deadline:
                 QApplication.processEvents()

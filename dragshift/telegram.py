@@ -39,7 +39,7 @@ def export_emoji(src, *, start=0., duration=None, fit='fit'):
     vf+=',setsar=1,format=yuva420p'
     with video.export_path(src,'Telegram emoji','.webm') as (tmp,outs):
         for attempt,quality in enumerate((32,42,52,63)):
-            args=video.ffmpeg_args()+['-ss',str(start),*decoder,'-i',str(source),'-t',str(duration),
+            args=video.ffmpeg_args()+['-ss',str(start),*video.input_options(source),*decoder,'-i',str(source),'-t',str(duration),
                 '-map',f'0:{info.video_index}','-an','-sn','-dn','-map_metadata','-1','-map_chapters','-1',
                 '-vf',vf,'-c:v','libvpx-vp9','-pix_fmt','yuva420p','-b:v','0','-crf',str(quality),
                 '-deadline','good','-cpu-used','4','-auto-alt-ref','0','-threads','4',str(tmp)]

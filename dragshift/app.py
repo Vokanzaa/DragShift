@@ -1,6 +1,8 @@
 """DragShift: Shift+drag any file to convert or edit it from a radial liquid-glass menu."""
 from __future__ import annotations
 
+from .i18n import tr, tr_items
+
 import json
 import os
 import sys
@@ -53,10 +55,10 @@ VIDEO_HINTS = {"Trim": "Choose in · out", "Compress": "Smaller MP4", "Resize": 
                "Edit": "Rotate · crop · speed · colour", "Mute": "Remove audio", "Frame": "Save a PNG frame",
                "Metadata": "View · remove tags", "Datamosh": "Melt video A into B", "Audio": "Extract sound · any format",
                "Distort": HINTS['Distort']}
-AUDIO_TOOLS = ["Trim", "Edit", "Normalize", "Fade", "Compress", "Reverse", "Transition", "Metadata"]
+AUDIO_TOOLS = ["Trim", "Edit", "Normalize", "Fade", "Compress", "Reverse", "Datamosh", "Transition", "Metadata"]
 AUDIO_HINTS = {"Trim": "Choose in · out", "Edit": "Volume · speed · channels", "Normalize": "Consistent loudness",
                "Fade": "Smooth start · end", "Compress": "Smaller audio file", "Reverse": "Play backwards",
-               "Metadata": "View · remove tags", "Transition": "Blend an ordered audio series"}
+               "Metadata": "View · remove tags", "Transition": "Blend an ordered audio series", "Datamosh":"Glitch the sound · intensity over time"}
 FORMAT_HINTS.update({"MP4": "H.264 · universal", "MKV": "Matroska · H.264", "MOV": "QuickTime · H.264",
                      "WEBM": "VP9 · web video", "AVI": "MPEG-4 · legacy", "MP3": "Audio only", "WAV": "Uncompressed audio"})
 FORMAT_HINTS.update({"FLAC": "Lossless audio", "M4A": "AAC · phones", "AAC": "Compact audio",
@@ -163,6 +165,12 @@ class DragShiftApp(QObject):
         self.watcher.show_menu.connect(lambda pos: self.menu.popup(pos))
         self.watcher.toggle_ring.connect(self.menu.next_ring)
         self.watcher.hide_menu.connect(self.menu.close_menu)
+        from .selection import SelectionShortcut
+        self.selection_shortcut=SelectionShortcut(self)
+        self.watcher.selection_menu.connect(lambda pos:self.selection_shortcut.request()
+                                             if not self.menu.isVisible() else None)
+        self.selection_shortcut.ready.connect(lambda paths:self.show_click_menu(paths)
+                                              if not self.menu.isVisible() else None)
         self.watcher.start()
 
         # files handed over by "Send to", the right-click menu, or a second launch
@@ -174,18 +182,18 @@ class DragShiftApp(QObject):
         self.server.newConnection.connect(self._ipc)
 
         self.tray = QSystemTrayIcon(make_tray_icon(), self)
-        self.tray.setToolTip(f"{APP_NAME} — press {self.trigger_label()} while dragging a file")
+        self.tray.setToolTip(tr(f"{APP_NAME} — press {self.trigger_label()} while dragging a file"))
         m = QMenu()
         m.setStyleSheet(glass.QSS)
-        self.act_enabled = QAction("Enabled", m, checkable=True, checked=True)
+        self.act_enabled = QAction(tr("Enabled"), m, checkable=True, checked=True)
         self.act_enabled.toggled.connect(lambda on: setattr(self.watcher, "enabled", on))
-        m.addAction(self.act_enabled)
+        m.addAction(tr(self.act_enabled))
         m.addSeparator()
-        m.addAction("Settings…", self.open_settings)
-        m.addAction("How to use", self.show_welcome)
-        m.addAction("Tip the developer ♥", lambda: QDesktopServices.openUrl(QUrl(TIP_URL)))
+        m.addAction(tr("Settings…"), self.open_settings)
+        m.addAction(tr("How to use"), self.show_welcome)
+        m.addAction(tr("Tip the developer ♥"), lambda: QDesktopServices.openUrl(QUrl(TIP_URL)))
         m.addSeparator()
-        m.addAction(f"Quit {APP_NAME}", self.qapp.quit)
+        m.addAction(tr(f"Quit {APP_NAME}"), self.qapp.quit)
         self.tray_menu = m
         self.tray.setContextMenu(m)
         self.tray.activated.connect(self._tray_click)
@@ -316,6 +324,10 @@ class DragShiftApp(QObject):
                             lambda: [o for p in paths for o in convert.convert(p, cat, name)], verb)
             return
         if cat == "video":
+            if name=='Resize':
+                from .video_geometry import VideoResizeWindow
+                self.open_window(VideoResizeWindow(paths,self.notify))
+                return
             if name == "Audio":
                 from .audio_tools import AudioToolWindow
                 self.open_window(AudioToolWindow(paths, self.notify, "Extract"))
@@ -325,6 +337,10 @@ class DragShiftApp(QObject):
                              else VideoToolWindow(paths, self.notify, name))
             return
         if cat == "audio":
+            if name=='Datamosh':
+                from .video_tools import DatamoshWindow
+                self.open_window(DatamoshWindow(paths,self.notify))
+                return
             from .audio_tools import AudioToolWindow, AudioTransitionWindow
             self.open_window(AudioTransitionWindow(paths, self.notify) if name == 'Transition'
                              else AudioToolWindow(paths, self.notify, name))
@@ -452,7 +468,7 @@ class DragShiftApp(QObject):
 
     def _settings_changed(self):
         self.watcher.set_key(self.settings.get("trigger"))
-        self.tray.setToolTip(f"{APP_NAME} — press {self.trigger_label()} while dragging a file")
+        self.tray.setToolTip(tr(f"{APP_NAME} — press {self.trigger_label()} while dragging a file"))
 
     def show_welcome(self):
         self.open_window(WelcomeWindow(self.settings, self.trigger_label()))
@@ -543,6 +559,8 @@ def main(argv: list[str] | None = None) -> int:
     qapp.setApplicationVersion(VERSION)
     qapp.setQuitOnLastWindowClosed(False)
     qapp.setWindowIcon(make_icon())
+    from .i18n import install as install_language
+    install_language(qapp,Settings().get('language'))
 
     if "--files-selftest" in argv:
         from .file_check import selftest as file_selftest
