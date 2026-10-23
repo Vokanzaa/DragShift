@@ -213,7 +213,7 @@ jobs:
             libdbus-1-3 libegl1 libgl1 libglib2.0-0 \
             xvfb xfwm4 thunar xdotool dbus-x11 ffmpeg feh fonts-dejavu-core fonts-noto-core \
             desktop-file-utils hicolor-icon-theme xdg-utils \
-            build-essential pkg-config libpng-dev liblqr-1-0-dev p7zip-full
+            build-essential pkg-config libpng-dev liblqr-1-0-dev libglib2.0-dev p7zip-full
 
       - uses: actions/checkout@v4
 
