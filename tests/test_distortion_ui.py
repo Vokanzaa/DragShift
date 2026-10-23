@@ -86,11 +86,31 @@ def test_preview_coalesces_and_ignores_old_result(qt_session,tmp_path,monkeypatc
     window.strength.setValue(80)
     window.load_frame()
     assert len(calls)==1
-    calls[0][1](b'old invalid image')
+    calls[0][1]((Image.new('RGBA',(20,20)),b'old invalid image'))
     wait(lambda:len(calls)==2)
     assert window.preview.text()!='Frame preview unavailable'
     data=io.BytesIO()
     Image.new('RGB',(20,20),'red').save(data,'PNG')
-    calls[1][1](data.getvalue())
+    calls[1][1]((Image.new('RGBA',(20,20)),data.getvalue()))
     assert not window._preview_busy and not window.preview.pixmap().isNull()
+    window.close()
+
+
+def test_strength_preview_reuses_decoded_source(qt_session,tmp_path,monkeypatch):
+    from dragshift import distortion
+    window=ready(tmp_path)
+    reads=[]
+    original=distortion.source_frame
+    def read(*args,**kwargs):
+        reads.append(args)
+        return original(*args,**kwargs)
+    monkeypatch.setattr(distortion,'source_frame',read)
+    window.strength.setValue(85)
+    window.load_frame()
+    wait(lambda:not window._preview_busy)
+    assert not reads
+    window.at.setValue(.25)
+    window.load_frame()
+    wait(lambda:not window._preview_busy)
+    assert len(reads)==1
     window.close()

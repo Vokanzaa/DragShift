@@ -44,6 +44,27 @@ def test_gif_to_webm_retains_animation(gif, media_engines):
     assert frames[0][0] > 220 and frames[1][2] > 220
 
 
+def test_short_gif_frames_keep_their_timestamps(tmp_path,media_engines):
+    import json
+    source=tmp_path/'quick.gif'
+    frames=[Image.new('RGB',(80,60),c) for c in ('red','green','blue')]
+    frames[0].save(source,save_all=True,append_images=frames[1:],duration=[10,30,460],disposal=2)
+    from dragshift import distortion
+    for out in (convert.convert(source,'image','WEBM')[0],distortion.export(source,strength=0,target='WEBM')[0]):
+        assert video.probe(out).duration==pytest.approx(.5,abs=.02)
+        data=json.loads(video.capture([video.executable('ffprobe'),'-v','error','-show_frames','-select_streams','v:0',
+                                      '-show_entries','frame=pts_time','-of','json',str(out)]))
+        times=[float(f['pts_time']) for f in data['frames']]
+        assert all(any(abs(t-expected)<.005 for t in times) for expected in (0,.01,.04))
+        raw=video.capture([video.executable('ffmpeg'),'-v','error','-i',str(out),'-f','rawvideo','-pix_fmt','rgb24','pipe:1'])
+        colors=[]
+        for expected in (0,.01,.04):
+            index=next(n for n,t in enumerate(times) if abs(t-expected)<.005)
+            offset=index*80*60*3+(30*80+40)*3
+            colors.append(raw[offset:offset+3])
+        assert colors[0][0]>220 and colors[1][1]>110 and colors[2][2]>220
+
+
 def test_resize_gif_retains_animation(gif):
     out = imaging.resize_image(gif, (40, 30))
     with Image.open(out) as result:

@@ -102,6 +102,27 @@ def test_cancel_does_not_publish_or_leave_staging(tmp_path):
     assert set(tmp_path.iterdir())==before
 
 
+def test_cancel_during_parallel_render_joins_workers_and_cleans(tmp_path,monkeypatch):
+    from dragshift import distortion
+    monkeypatch.setattr(distortion.os,'cpu_count',lambda:8)
+    source=tmp_path/'series.gif'
+    frames=[picture((n*10,40,255-n*10)).resize((320,240)) for n in range(24)]
+    frames[0].save(source,save_all=True,append_images=frames[1:],duration=100,disposal=2)
+    before=set(tmp_path.iterdir())
+    cancel=threading.Event()
+    processed=[]
+    def update(value,message):
+        if .2<value<.8:
+            processed.append(value)
+            cancel.set()
+    with video.job_context(video.Control(cancel=cancel,progress=update)):
+        with pytest.raises(video.Cancelled):
+            distortion.export(source,strength=75,target='GIF',max_side=320)
+    assert processed
+    assert not any(t.name.startswith('distort_') for t in threading.enumerate())
+    assert set(tmp_path.iterdir())==before
+
+
 def test_high_frame_rate_and_portrait_bound(tmp_path,media_engines):
     import json
     from dragshift import distortion
