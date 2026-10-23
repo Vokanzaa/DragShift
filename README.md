@@ -1,6 +1,6 @@
 # DragShift — local file tools
 
-## Custom Windows build 1.1.0+files.4
+## Custom Windows build 1.1.0+files.5
 
 This local extension is based on [llamaboi55/DragShift](https://github.com/llamaboi55/DragShift), upstream commit `88abe0cf392b80ad2db805ef12b020c76a6cf458` retrieved on 2026-10-19. It is not an official upstream release. The custom Windows package adds video, audio, experimental Datamosh and archive workflows to the original Shift-drag radial menu, with neutral matte glass.
 
@@ -28,28 +28,37 @@ Choose a format in **Convert**, or an operation in **Tools**. Editors open only 
 | Word DOCX | PDF, TXT | Conversion |
 | Text: TXT, MD, CSV, LOG, JSON, XML, HTML/HTM | PDF, DOCX | Plain-text conversion |
 
-Available decoders and encoders determine whether a particular file is readable. Unsupported extensions have no conversion actions in the radial menu. This is not a general Office, spreadsheet, slide, OCR or 3D converter. Text formats are imported as text, without evaluating HTML, Markdown or spreadsheet formulas. Animated images opened through image conversion use their first frame; animated GIF export from video is a separate workflow.
+Available decoders and encoders determine whether a particular file is readable. Unsupported extensions have no conversion actions in the radial menu. This is not a general Office, spreadsheet, slide, OCR or 3D converter. Text formats are imported as text, without evaluating HTML, Markdown or spreadsheet formulas. Animated GIF editing preserves composited frames, frame durations, transparency and loop metadata. Animation-capable image outputs (GIF, WebP, PNG/APNG, TIFF, AVIF) retain the sequence; static formats such as JPG use its first frame. GIF also offers MP4 and WebM conversion with its original animation, without a generated camera effect.
+
+Numeric slider values are editable with the keyboard; Enter confirms the value without exporting. Open tools accept local-file drops: source editors replace the current input, while Melt/audio sequence lists append files. Drop onto either Melt preview to replace that clip. Sequence rows can be reordered by dragging or with the up/down buttons. Pack accepts additional files and folders.
 
 DOCX → PDF uses Microsoft Word when available, otherwise a basic local renderer. PDF → DOCX rebuilds paragraphs and images. Complex layouts, fonts, tables, headers, charts and scanned pages may not reproduce accurately; scanned text is not recognized with OCR.
 
 ## Video and Datamosh
 
-MP4/MKV/MOV use H.264 and AAC, WebM uses VP9 and Opus, and AVI uses MPEG-4 video. GIF exports use 12 fps and an edge up to 640 px. Video edits save a new MP4. Speed ranges from 0.25× to 4× and preserves audio pitch. The editor's frame preview shows the source; it does not render pending edits.
+MP4/MKV/MOV use H.264 and AAC, WebM uses VP9 and Opus, and AVI uses MPEG-4 video. GIF exports from video use 12 fps and an edge up to 640 px. Video edits save a new MP4. Speed ranges from 0.25× to 4× and preserves audio pitch. The frame preview updates with rotation, centre crop, mirror and colour settings using the same filters as export. Trim has two range handles synchronized with its start/end numeric fields; the frame slider also allows scrubbing.
 
 **Tools → Audio** extracts the first audio track from a video into any supported audio output format. **Mute** saves an MP4 without audio; **Frame** saves a full-resolution PNG.
 
-For a psychedelic transition from the end of A to the beginning of B:
+For a classic Melt transition or an ordered video series:
 
-1. Open **Tools → Datamosh** on A and choose B, or select two videos together.
-2. Set **Last seconds of A**, **First seconds of B** and **Transition duration**. Leave at least 0.1 seconds of clean B after the transition.
-3. **Melt** is selected by default. You can also choose **Bloom**, **Fluid** or **Psychedelic**, intensity, longest edge, fps and whether to retain audio.
-4. Use **Render preview** for a short 480 px export, then open it from the result notification. **Create transition** saves the full selected segments as MP4.
+1. Open **Tools → Datamosh** on a video, or select several together. Add/drop clips and set their order (2–16 clips).
+2. With two clips, select excerpts using **Last seconds of A** / **First seconds of B**, or uncheck the excerpt option to include both full clips. Series of three or more include every clip once in full.
+3. Set transition duration, intensity, longest edge, fps and whether to retain audio. Leave at least two clean frames after the transition in each following clip. **Melt** is the only effect.
+4. Shape the strength curve across the output timeline. Double-click adds a point; drag it or type its percentage position/strength. Right-click/Delete removes interior points. Vertical markers show clip changes. Zero is clean video; a flat 100% curve uses the selected intensity throughout.
+5. **Render preview** exports the same timeline and curve at 480 px. Open it from the result notification. **Create Melt video** saves the selected full-resolution result as MP4.
 
-The bridge uses FFglitch motion-vector editing and I-frame removal, then recovers a clean B. A final FFmpeg pass produces a playable H.264 MP4. The output consists of the selected tail/head segments, not both entire videos. Audio segments are joined; silence fills a missing track when only one selected segment has audio. Datamosh is experimental: motion-rich clips tend to produce stronger artifacts, and source material affects every result.
+Each bridge uses FFglitch motion-vector editing and I-frame removal, then recovers clean footage. A final FFmpeg pass produces a playable H.264 MP4. Removed frames are compensated at their original timeline positions so later cuts and sound stay aligned. Audio segments are joined; silence fills missing tracks. Datamosh is experimental: motion-rich clips tend to produce stronger artifacts, and source material affects every result.
+
+### Telegram custom emoji
+
+For GIF or video, choose **Convert → TG Emoji**. Select a segment up to three seconds using the range handles or numeric fields, then choose full-frame fit with transparent padding or a square centre crop. The export uses **WebM / VP9, exactly 100×100, no audio stream, at most 30 fps and 256,000 bytes**. Encoding retries at smaller quality when necessary and verifies the resulting streams, dimensions, duration, fps and size before publishing the file. The segment is preserved as animation; Telegram recommends choosing a seamless loop. [Official requirements](https://core.telegram.org/stickers/webm-vp9-encoding).
 
 ## Audio
 
 **Edit** combines trimming, volume in dB, pitch-preserving tempo, reverse, mono, fades, normalization, sample rate and output format. Edits save directly to **Save as**, so WAV or FLAC can be chosen without an intermediate AAC encode. The initial format follows the input when supported; otherwise it is M4A. **Compress** starts with MP3 at 128 kb/s.
+
+**Tools → Transition** blends an ordered series of 2–16 audio files with overlapping linear crossfades. The same tool is available from **Datamosh → Audio file transitions…**. Drop files, reorder them, set overlap duration and output format. Middle clips need room for both incoming and outgoing fades. Export duration equals the sum of clip lengths minus one overlap per cut; the result is stereo at 48 kHz (with encoder-compatible rate selection).
 
 Normalization measures the processed signal, then applies FFmpeg's two-pass EBU R128 `loudnorm` at −16 LUFS, −1.5 dBTP and LRA 11. Fades are included in the measurement; a volume gain follows normalization, so a positive gain can exceed that normalization peak target. Silence or material shorter than the measurement gate is exported without invalid infinite measurements.
 
