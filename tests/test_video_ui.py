@@ -40,7 +40,7 @@ def test_video_rings(qapp):
     rings = DragShiftApp.build_rings(None, ["a.mp4", "b.mov"])
     assert {i.key for i in rings["Convert"]} >= {"convert:WEBM", "convert:GIF", "convert:MP3"}
     assert {i.key for i in rings["Tools"]} == {"tool:" + t for t in
-        ["Trim", "Compress", "Resize", "Edit", "Mute", "Frame", "Metadata", "Datamosh", "Audio", "Pack"]}
+        ["Trim", "Compress", "Resize", "Edit", "Mute", "Frame", "Distort", "Metadata", "Datamosh", "Audio", "Pack"]}
 
 
 @pytest.mark.parametrize("mode", ["Trim", "Compress", "Resize", "Edit", "Mute", "Frame", "Metadata"])
