@@ -78,7 +78,8 @@ def executable(name: str) -> str:
     found = shutil.which(name)
     if found:
         return found
-    package = "FFglitch (ffgac and ffedit)" if name in ("ffgac", "ffedit") else "FFmpeg (ffmpeg and ffprobe)"
+    package = ("ImageMagick with Liquid Rescale" if name == 'magick' else
+               "FFglitch (ffgac and ffedit)" if name in ("ffgac", "ffedit") else "FFmpeg (ffmpeg and ffprobe)")
     raise UserError(f"{name} was not found. Install {package} and add its bin folder to PATH, or put it in DragShift/bin.")
 
 
@@ -167,13 +168,13 @@ def probe(src) -> VideoInfo:
 
 def run_process(args: list[str], duration: float = 0, message="Processing video…",
                 offset: float = 0, span: float = 1, parse_progress: bool = True,
-                *, cwd: str | Path | None = None):
+                *, cwd: str | Path | None = None, env: dict | None = None):
     """Drain stdout in a reader thread so cancellation works even with no output."""
     check_cancel()
     progress(offset, message)
     with tempfile.TemporaryFile() as err:
         proc = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                stderr=err, creationflags=CREATION_FLAGS, cwd=cwd)
+                                stderr=err, creationflags=CREATION_FLAGS, cwd=cwd, env=env)
         lines = queue.Queue()
 
         def read():

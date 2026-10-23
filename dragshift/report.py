@@ -75,6 +75,8 @@ def summarize(action: str, srcs: list, outs: list, extra: str = "") -> Result:
         return Result("Archive created", f"{o0.name} · {human_size(after)}", outs, srcs)
     if action == 'tool:Telegram emoji':
         return Result('Telegram emoji created',f'{o0.name} · WebM / VP9 · 100×100 · {human_size(after)}',outs,srcs)
+    if action == 'tool:Distort':
+        return Result('Distortion ready',f'{o0.name} · {human_size(after)}'+(f' · {extra}' if extra else ''),outs,srcs)
 
     if category(src) == "audio" or (category(src) == "video" and category(o0) == "audio"):
         from . import audio, video

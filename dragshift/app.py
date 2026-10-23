@@ -31,27 +31,28 @@ IPC_NAME = ipc_name()
 
 GLYPHS = {"Compress": "⇲", "Metadata": "ⓘ", "Redact": "▮", "Crop": "⌗", "Edit": "☼",
           "Annotate": "✎", "Add BG": "▣", "Resize": "⤢", "Split": "✂", "Rotate": "⟳",
-          "Merge": "⧉", "Protect": "⚿", "Extract": "⧈"}
+          "Merge": "⧉", "Protect": "⚿", "Extract": "⧈", "Distort": "⌁"}
 
 HINTS = {
     "Compress": "Shrink file size", "Metadata": "View · remove GPS", "Redact": "Hide private info",
     "Crop": "Trim to a ratio", "Edit": "Light · colour · rotate", "Annotate": "Arrows · text · steps",
     "Add BG": "Gradient backdrop", "Resize": "Change dimensions", "Split": "One PDF per page",
     "Rotate": "Turn pages 90°", "Merge": "Join into one PDF", "Protect": "Add a password",
-    "Extract": "Save embedded images",
+    "Extract": "Save embedded images", "Distort": "Content-aware distortion · GIF / video / frame",
 }
 FORMAT_HINTS = {"JPG": "Small, universal", "PNG": "Lossless · transparency", "WEBP": "Smallest for web",
                 "HEIC": "iPhone format", "TIFF": "Print · archival", "AVIF": "Next-gen, tiny",
                 "BMP": "Uncompressed", "PDF": "Document", "ICO": "Windows icon", "GIF": "Legacy web",
                 "DOCX": "Editable Word", "TXT": "Plain text"}
 
-IMAGE_TOOLS = ["Compress", "Resize", "Crop", "Edit", "Annotate", "Redact", "Add BG", "Metadata"]
+IMAGE_TOOLS = ["Compress", "Resize", "Crop", "Edit", "Annotate", "Redact", "Add BG", "Distort", "Metadata"]
 PDF_TOOLS = ["Compress", "Split", "Rotate", "Protect", "Extract", "Metadata"]
-VIDEO_TOOLS = ["Trim", "Compress", "Resize", "Edit", "Mute", "Frame", "Metadata", "Datamosh", "Audio"]
+VIDEO_TOOLS = ["Trim", "Compress", "Resize", "Edit", "Mute", "Frame", "Distort", "Metadata", "Datamosh", "Audio"]
 VIDEO_GLYPHS = {"Trim": "✂", "Mute": "♪", "Frame": "▣", "Datamosh": "≈", "Audio": "♫"}
 VIDEO_HINTS = {"Trim": "Choose in · out", "Compress": "Smaller MP4", "Resize": "Change dimensions",
                "Edit": "Rotate · crop · speed · colour", "Mute": "Remove audio", "Frame": "Save a PNG frame",
-               "Metadata": "View · remove tags", "Datamosh": "Melt video A into B", "Audio": "Extract sound · any format"}
+               "Metadata": "View · remove tags", "Datamosh": "Melt video A into B", "Audio": "Extract sound · any format",
+               "Distort": HINTS['Distort']}
 AUDIO_TOOLS = ["Trim", "Edit", "Normalize", "Fade", "Compress", "Reverse", "Transition", "Metadata"]
 AUDIO_HINTS = {"Trim": "Choose in · out", "Edit": "Volume · speed · channels", "Normalize": "Consistent loudness",
                "Fade": "Smooth start · end", "Compress": "Smaller audio file", "Reverse": "Play backwards",
@@ -294,6 +295,10 @@ class DragShiftApp(QObject):
         cat = category(paths[0])
         paths = [p for p in paths if category(p) == cat]
         kind, name = item.key.split(":", 1)
+        if name == 'Distort':
+            from .distortion_tools import DistortionWindow
+            self.open_window(DistortionWindow(paths,self.notify))
+            return
         if name == 'Telegram emoji':
             from .video_tools import TelegramEmojiWindow
             self.open_window(TelegramEmojiWindow(paths, self.notify))
@@ -381,7 +386,7 @@ class DragShiftApp(QObject):
 
     def submit(self, action: str, srcs: list, fn, working: str = "Working…", extra: str = ""):
         """Run in the background. A spinner card appears only if it takes > 150 ms."""
-        if action in ("tool:Pack", "tool:Telegram emoji") or any(category(p) in ("video", "audio", "archive")
+        if action in ("tool:Pack", "tool:Telegram emoji", "tool:Distort") or any(category(p) in ("video", "audio", "archive")
                 or str(p).lower().endswith('.gif') for p in srcs):
             from .video_tools import VideoProgressWindow
             window = VideoProgressWindow(action, srcs, fn, lambda r: self.toasts.new().done(r), extra)

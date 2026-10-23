@@ -29,7 +29,7 @@ def selftest():
             blended=audio.transition([sound,sound,sound],duration=.25,target='WAV')[0]
             assert abs(audio.probe(blended).duration-5.5)<.02
             from PIL import Image
-            from . import imaging,convert,telegram
+            from . import imaging,convert,telegram,distortion
             gif=base/'animated.gif'
             Image.new('RGBA',(80,60),'red').save(gif,save_all=True,
                 append_images=[Image.new('RGBA',(80,60),'blue')],duration=[200,400],loop=0,disposal=2)
@@ -40,6 +40,12 @@ def selftest():
             assert .55<video.probe(animated_video).duration<.65
             emoji=telegram.export_emoji(gif)[0]
             assert telegram.validate_export(emoji).width==100
+            distorted=distortion.export(gif,strength=60,target='GIF')[0]
+            with Image.open(distorted) as image:
+                assert image.n_frames==2 and image.size==(80,60)
+            frame=distortion.export(gif,strength=40,target='PNG',at=.3)[0]
+            with Image.open(frame) as image:
+                assert image.getpixel((40,30))[:3]==(0,0,255)
             source = base / "archive.zip"
             with zipfile.ZipFile(source, "w") as z:
                 z.writestr("folder/hello.txt", "DragShift test")
@@ -90,7 +96,7 @@ def selftest():
                 window.close()
             menu.close()
             QApplication.processEvents()
-        print("FILES SELFTEST OK · audio transitions, GIF animation/crop, Telegram emoji, audio, archives, ZIP/7Z, deliberate ring input, video and Melt series", flush=True)
+        print("FILES SELFTEST OK · Liquid Rescale distortion/selected frame, audio transitions, GIF animation/crop, Telegram emoji, audio, archives, ZIP/7Z, deliberate ring input, video and Melt series", flush=True)
         return 0
     except Exception:
         import traceback
