@@ -3,18 +3,30 @@ import os
 import sys
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_all
+from PySide6.QtCore import QLibraryInfo
 
 onefile = os.environ.get("ONEFILE") == "1"
 heif_datas, heif_bins, heif_hidden = collect_all("pillow_heif")
-engine_names = {"ffmpeg.exe", "ffprobe.exe", "ffgac.exe", "ffedit.exe", "7z.exe", "7z.dll",
-                "FFmpeg-LICENSE.txt", "FFglitch-readme.txt", "7-Zip-License.txt",
-                "magick.exe", "ImageMagick-LICENSE.txt", "ImageMagick-NOTICE.txt"}
-engine_datas = [(str(p), "bin") for p in Path("bin").glob("*") if p.name in engine_names]
+engine_names = {"ffmpeg", "ffprobe", "ffgac", "ffedit", "7z", "7zz", "magick"}
+engine_datas, engine_bins = [], []
+for p in Path("bin").glob("*"):
+    if not p.is_file():
+        continue
+    if p.stem in engine_names and p.suffix.lower() in ("", ".exe") or p.suffix.lower() in (".dll", ".so", ".dylib"):
+        # Scan ELF/Mach-O dependencies and relocate them into the frozen bundle.
+        # Windows engines are self-contained; retain the already verified layout.
+        (engine_datas if sys.platform == "win32" else engine_bins).append((str(p), "bin"))
+    elif p.suffix.lower() in (".txt", ".json"):
+        engine_datas.append((str(p), "bin"))
+qt_russian=Path(QLibraryInfo.path(QLibraryInfo.TranslationsPath))/'qtbase_ru.qm'
+if not qt_russian.is_file():
+    raise RuntimeError('Qt Russian translation is required for this bilingual build.')
+language_datas=[(str(qt_russian),'dragshift/assets')]
 
 a = Analysis(
     ["run.py"],
-    datas=[("dragshift/assets", "dragshift/assets"), ("THIRD_PARTY.md", "."), ("LICENSE", ".")] + heif_datas + engine_datas,
-    binaries=heif_bins,
+    datas=[("dragshift/assets", "dragshift/assets"), ("THIRD_PARTY.md", "."), ("LICENSE", ".")] + heif_datas + engine_datas + language_datas,
+    binaries=heif_bins + engine_bins,
     hiddenimports=["win32com.client", "PySide6.QtNetwork", "AppKit", "Quartz", "objc"] + heif_hidden,
     excludes=["tkinter", "PySide6.QtWebEngineCore", "PySide6.QtWebEngineWidgets", "PySide6.QtQml",
               "PySide6.QtQuick", "PySide6.Qt3DCore", "PySide6.QtMultimedia", "PySide6.QtCharts",
@@ -59,7 +71,7 @@ if IS_MAC:
             "CFBundleName": "DragShift",
             "CFBundleDisplayName": "DragShift",
             "CFBundleShortVersionString": "1.1.0",
-            "CFBundleVersion": "1.1.0",
+            "CFBundleVersion": "1.1.7",
             "LSUIElement": True,                 # menu-bar app, no Dock icon
             "LSMinimumSystemVersion": "11.0",
             "NSHighResolutionCapable": True,
