@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import platform
+import shlex
 import shutil
 import subprocess
 import sys
@@ -58,6 +59,34 @@ def find_copy(folder, name, dest):
     (dest / name).chmod(0o755)
 
 
+def windows_sevenzip():
+    # Chocolatey's PATH entry can be a shim without the adjacent format DLL.
+    candidates = [Path(os.environ.get(key, default)) / '7-Zip' / '7z.exe'
+                  for key, default in (('ProgramFiles', r'C:\Program Files'),
+                                       ('ProgramFiles(x86)', r'C:\Program Files (x86)'))]
+    found = shutil.which('7z')
+    if found:
+        candidates.append(Path(found))
+    for executable in candidates:
+        if executable.is_file() and executable.with_name('7z.dll').is_file():
+            return executable
+    raise RuntimeError('Install 7-Zip with both 7z.exe and 7z.dll before staging')
+
+
+def imagemagick_env():
+    packages = ('lqr-1', 'libpng', 'glib-2.0')
+    run(['pkg-config', '--print-errors', '--exists', 'lqr-1 >= 0.1.0', *packages[1:]])
+    # pkgconf may omit Homebrew's "system" -L directory, although Apple ld
+    # does not search it. Preserve explicit delegate paths for the final link.
+    folders = dict.fromkeys(subprocess.check_output(
+        ['pkg-config', '--variable=libdir', package], text=True).strip()
+        for package in packages)
+    env = os.environ.copy()
+    env['LDFLAGS'] = ' '.join(filter(None, [env.get('LDFLAGS', ''),
+        *['-L' + shlex.quote(folder) for folder in folders if folder]]))
+    return env
+
+
 def stage():
     system, machine = platform.system(), platform.machine()
     suffix = '.exe' if system == 'Windows' else ''
@@ -76,7 +105,7 @@ def stage():
     if readmes:
         shutil.copy2(readmes[0], dest / 'FFglitch-readme.txt')
     if system == 'Windows':
-        z = shutil.which('7z') or r'C:\Program Files\7-Zip\7z.exe'
+        z = windows_sevenzip()
         for name in ('7z.exe', '7z.dll'):
             shutil.copy2(Path(z).parent / name, dest / name)
         ffmpeg = download('https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip', cache / 'ffmpeg.zip', records)
@@ -119,9 +148,10 @@ def stage():
         options = ['--disable-shared', '--enable-static', '--without-modules', '--disable-installed',
                    '--disable-hdri', '--with-quantum-depth=16', '--disable-openmp', '--without-magick-plus-plus',
                    '--without-perl', '--without-x', '--with-lqr=yes', '--with-png=yes', '--with-zlib=yes']
-        run(['./configure', '--prefix=' + str(prefix), *options, *['--without-' + n for n in disabled]], cwd=folder)
-        run(['make', '-j' + str(min(4, os.cpu_count() or 2))], cwd=folder)
-        run(['make', 'install'], cwd=folder)
+        build_env = imagemagick_env()
+        run(['./configure', '--prefix=' + str(prefix), *options, *['--without-' + n for n in disabled]], cwd=folder, env=build_env)
+        run(['make', '-j' + str(min(4, os.cpu_count() or 2))], cwd=folder, env=build_env)
+        run(['make', 'install'], cwd=folder, env=build_env)
         shutil.copy2(prefix / 'bin' / 'magick', dest / 'magick')
         for name in ('LICENSE', 'NOTICE'):
             shutil.copy2(folder / name, dest / ('ImageMagick-' + name + '.txt'))
@@ -136,7 +166,7 @@ def check():
         path = video.executable(name)
         value = video.capture([path, '-version']).decode('utf-8', 'replace')
         if name == 'magick' and (' lqr ' not in value or 'png' not in value.lower()):
-            raise RuntimeError('ImageMagick requires PNG and Liquid Rescale support')
+            raise RuntimeError('ImageMagick requires PNG and Liquid Rescale support:\n' + value)
         versions[name] = value.splitlines()[0]
     video.capture([archives.executable(), 'i'])
     print(json.dumps(versions, indent=2))
