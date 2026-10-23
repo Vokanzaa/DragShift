@@ -312,7 +312,7 @@ def convert_video(src, target: str) -> list[Path]:
             args += ["-c:a", "libmp3lame", "-q:a", "2"] if target == "MP3" else ["-c:a", "pcm_s16le"]
         else:
             args += ["-map", f"0:{info.video_index}", "-map", "0:a:0?", "-vf",
-                     square_pixels_filter(), *_video_codec(target)]
+                     square_pixels_filter() + (",fps=30" if Path(src).suffix.lower() == '.gif' else ''), *_video_codec(target)]
         if target != "GIF":
             args += [str(tmp)]
             run_process(args, info.duration, f"Converting to {target}…")
@@ -326,16 +326,9 @@ def validate_range(info: VideoInfo, start: float, end: float | None):
     return start, min(end, info.duration)
 
 
-def transform(src, *, start=0., end=None, max_side=None, crf=23, crop_ratio=None,
-              rotation=0, flip=False, speed=1., brightness=0., contrast=1., saturation=1.,
-              mute=False, strip_metadata=False, label="Edited") -> list[Path]:
-    info = probe(src)
-    start, end = validate_range(info, start, end)
-    if (not math.isfinite(speed) or not .25 <= speed <= 4 or rotation not in (0, 90, 180, 270)
-            or not 16 <= crf <= 40 or (max_side is not None and not 16 <= max_side <= 7680)
-            or not -.5 <= brightness <= .5 or not .1 <= contrast <= 3 or not 0 <= saturation <= 3
-            or (crop_ratio is not None and not .1 <= crop_ratio <= 10)):
-        raise UserError("Choose valid video settings (speed 0.25–4×, size 16–7680 px, rotation 0/90/180/270°).")
+def edit_filters(*, max_side=None, crop_ratio=None, rotation=0, flip=False,
+                 brightness=0., contrast=1., saturation=1.):
+    """One geometric/colour pipeline for both preview frames and saved movies."""
     vf = [square_pixels_filter()]
     if crop_ratio:
         vf.append(f"crop=w='trunc(min(iw,ih*{crop_ratio})/2)*2':h='trunc(min(ih,iw/{crop_ratio})/2)*2'")
@@ -351,7 +344,23 @@ def transform(src, *, start=0., end=None, max_side=None, crf=23, crop_ratio=None
         vf.append(f"scale=w='trunc(iw*min(1,{max_side}/max(iw,ih))/2)*2':h='trunc(ih*min(1,{max_side}/max(iw,ih))/2)*2'")
     else:
         vf.append("scale=trunc(iw/2)*2:trunc(ih/2)*2")
-    vf += [f"eq=brightness={brightness}:contrast={contrast}:saturation={saturation}", f"setpts=(PTS-STARTPTS)/{speed}"]
+    vf.append(f"eq=brightness={brightness}:contrast={contrast}:saturation={saturation}")
+    return vf
+
+
+def transform(src, *, start=0., end=None, max_side=None, crf=23, crop_ratio=None,
+              rotation=0, flip=False, speed=1., brightness=0., contrast=1., saturation=1.,
+              mute=False, strip_metadata=False, label="Edited") -> list[Path]:
+    info = probe(src)
+    start, end = validate_range(info, start, end)
+    if (not math.isfinite(speed) or not .25 <= speed <= 4 or rotation not in (0, 90, 180, 270)
+            or not 16 <= crf <= 40 or (max_side is not None and not 16 <= max_side <= 7680)
+            or not -.5 <= brightness <= .5 or not .1 <= contrast <= 3 or not 0 <= saturation <= 3
+            or (crop_ratio is not None and not .1 <= crop_ratio <= 10)):
+        raise UserError("Choose valid video settings (speed 0.25–4×, size 16–7680 px, rotation 0/90/180/270°).")
+    vf = edit_filters(max_side=max_side, crop_ratio=crop_ratio, rotation=rotation, flip=flip,
+                      brightness=brightness, contrast=contrast, saturation=saturation)
+    vf.append(f"setpts=(PTS-STARTPTS)/{speed}")
     with export_path(src, label) as (tmp, outs):
         args = ffmpeg_args() + ["-ss", str(start), "-t", str(end - start), "-i", str(local_file(src)),
                                 "-map", f"0:{info.video_index}", "-vf", ",".join(vf)]
@@ -377,9 +386,11 @@ def transform(src, *, start=0., end=None, max_side=None, crf=23, crop_ratio=None
     return outs
 
 
-def preview_bytes(src, at=0., max_side=720) -> bytes:
+def preview_bytes(src, at=0., max_side=720, *, crop_ratio=None, rotation=0, flip=False,
+                  brightness=0., contrast=1., saturation=1.) -> bytes:
     # Preview avoids a second probe; caller supplies a validated local file/time.
-    vf = square_pixels_filter() + f",scale=w='min({max_side},iw)':h=-2"
+    vf = ','.join(edit_filters(max_side=max_side, crop_ratio=crop_ratio, rotation=rotation, flip=flip,
+                              brightness=brightness, contrast=contrast, saturation=saturation))
     return capture([executable("ffmpeg"), "-v", "error", "-nostdin", "-ss", str(max(0., at)),
                     "-i", str(local_file(src)), "-frames:v", "1", "-vf", vf,
                     "-f", "image2pipe", "-c:v", "png", "-threads", "1", "pipe:1"])

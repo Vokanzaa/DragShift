@@ -145,10 +145,9 @@ class SettingsWindow(GlassWindow):
         self.q = QSlider(Qt.Horizontal)
         self.q.setRange(60, 100)
         self.q.setValue(self.s.get("jpg_quality"))
-        self.qv = QLabel(str(self.q.value()))
-        self.qv.setObjectName("dim")
-        self.qv.setFixedWidth(30)
-        self.q.valueChanged.connect(lambda v: (self.qv.setText(str(v)), self._save("jpg_quality", v)))
+        from .media_controls import value_editor
+        self.qv = value_editor(self.q,'JPG / WebP quality')
+        self.q.valueChanged.connect(lambda v:self._save('jpg_quality',v))
         row.addWidget(self.q)
         row.addWidget(self.qv)
         grid.addLayout(row, r, 1)

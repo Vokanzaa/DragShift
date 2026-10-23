@@ -117,6 +117,37 @@ def convert_audio(src, target: str) -> list[Path]:
     return outs
 
 
+def transition(paths, *, duration=.75, target='M4A', bitrate=192):
+    """Join an ordered audio series with real overlapping crossfades."""
+    paths=[_file(p) for p in paths]
+    if not 2 <= len(paths) <= 16:
+        raise UserError('Choose 2–16 audio files in the desired order.')
+    target=_target(target)
+    duration=_setting(duration,'crossfade duration',.05,60)
+    infos=[probe(p) for p in paths]
+    if any(info.duration <= duration*(2 if 0<i<len(infos)-1 else 1)+.02 for i,info in enumerate(infos)):
+        raise UserError('The crossfades must fit inside every file. Middle clips need room for two fades.')
+    if bitrate not in (64,96,128,160,192,256,320):
+        raise UserError('Choose a supported audio bitrate.')
+    inputs=[]
+    graph=[]
+    for i,path in enumerate(paths):
+        inputs+=['-i',str(path)]
+        graph.append(f'[{i}:a:0]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,asetpts=PTS-STARTPTS[a{i}]')
+    previous='a0'
+    for i in range(1,len(paths)):
+        label=f'mix{i}'
+        graph.append(f'[{previous}][a{i}]acrossfade=d={duration}:c1=tri:c2=tri[{label}]')
+        previous=label
+    total=sum(i.duration for i in infos)-duration*(len(paths)-1)
+    rate=_rate(target,48000)
+    with video.export_path(paths[0],'Audio transition','.'+target.lower()) as (tmp,outs):
+        args=video.ffmpeg_args()+inputs+['-filter_complex_threads','2','-filter_complex',';'.join(graph),
+            '-map',f'[{previous}]','-vn',*_codec(target,rate,2,bitrate),str(tmp)]
+        video.run_process(args,total,'Creating audio transitions…')
+    return outs
+
+
 def _setting(value, name: str, minimum: float, maximum: float) -> float:
     try:
         n = float(value)

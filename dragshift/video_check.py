@@ -28,6 +28,8 @@ def selftest():
                 out = datamosh.transition(a, b, tail=.5, head=1.5, duration=.5, max_side=160, preset=preset)[0]
                 info = video.probe(out)
                 assert abs(info.duration - 2) < .15 and info.has_audio
+            series=datamosh.sequence([a,b,a],duration=.5,max_side=160,curve=[(0,0),(.3,0),(.6,1),(1,1)])[0]
+            assert abs(video.probe(series).duration-6)<.15
             from .video_tools import DatamoshWindow, VideoToolWindow
             windows = [DatamoshWindow([str(a), str(b)], lambda *_: None), VideoToolWindow([str(a)], lambda *_: None)]
             deadline = time.monotonic() + 15
@@ -40,7 +42,7 @@ def selftest():
             for w in windows:
                 w.close()
             QApplication.processEvents()
-        print("VIDEO SELFTEST OK · 8 exports, editing, frame, 4 real FFglitch presets, Qt editors", flush=True)
+        print("VIDEO SELFTEST OK · 8 exports, editing, frame, classic Melt, series, strength curve, Qt editors", flush=True)
         return 0
     except Exception:
         import traceback

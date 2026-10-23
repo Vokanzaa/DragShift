@@ -13,7 +13,7 @@ from PIL import Image
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer, QUrl
 from PySide6.QtGui import (QColor, QDesktopServices, QFont, QGuiApplication, QImage, QKeySequence,
                            QPainter, QPainterPath, QPen, QPixmap, QPolygonF, QShortcut)
-from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QColorDialog, QComboBox, QFrame,
+from PySide6.QtWidgets import (QAbstractSpinBox, QButtonGroup, QCheckBox, QColorDialog, QComboBox, QFrame,
                                QGridLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
                                QPushButton, QSlider, QSpinBox, QTableWidget, QTableWidgetItem,
                                QVBoxLayout, QWidget)
@@ -24,6 +24,7 @@ from .convert import open_image, open_preview
 from .glass import pil_from_qimage, qimage_from_pil
 from .util import file_size, human_size, sibling
 from .window import GlassWindow, ImageView
+from .media_controls import local_paths, value_editor
 
 Notify = Callable[..., None]
 
@@ -57,14 +58,10 @@ def toggle_row(labels: list[str], checked: int = 0) -> tuple[QHBoxLayout, QButto
     return row, grp
 
 
-def slider_row(grid: QGridLayout, r: int, label: str, s: QSlider, fmt: Callable[[int], str]) -> QLabel:
+def slider_row(grid: QGridLayout, r: int, label: str, s: QSlider, fmt: Callable[[int], str]) -> QSpinBox:
     grid.addWidget(QLabel(label), r, 0)
     grid.addWidget(s, r, 1)
-    val = QLabel(fmt(s.value()))
-    val.setObjectName("dim")
-    val.setMinimumWidth(56)
-    val.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-    s.valueChanged.connect(lambda v: val.setText(fmt(v)))
+    val = value_editor(s, label, fmt)
     grid.addWidget(val, r, 2)
     return val
 
@@ -82,6 +79,10 @@ class ToolWindow(GlassWindow):
         self.path = self.paths[0]
         self.notify = notify
         self.submit = None   # set by the app: run work in the background with a spinner
+        self._source_list = isinstance(paths, (list, tuple))
+        self.source_kwargs = {}
+        self.replacement_handler = None
+        self.setAcceptDrops(True)
         if len(self.paths) == 1:
             sub = f"{self.path.name}  ·  {human_size(file_size(self.path))}"
         else:
@@ -94,9 +95,55 @@ class ToolWindow(GlassWindow):
         QShortcut(QKeySequence(Qt.Key_Enter), self, activated=self._enter)
         self.primary_btn: QPushButton | None = None
 
+    def accepts_sources(self, paths):
+        from .util import category
+        return bool(paths) and all(category(p) == category(self.path) for p in paths)
+
+    def dragEnterEvent(self, event):
+        if self.accepts_sources(local_paths(event.mimeData())):
+            event.setDropAction(Qt.CopyAction)
+            event.accept()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        self.dragEnterEvent(event)
+
+    def dropEvent(self, event):
+        paths = local_paths(event.mimeData())
+        if not self.accepts_sources(paths):
+            event.ignore()
+            return
+        event.setDropAction(Qt.CopyAction)
+        event.accept()
+        self.receive_files(paths)
+
+    def receive_files(self, paths):
+        # Recreate the same tool around its actual new source. Old previews and
+        # pending lookups remain attached to the closing window, never the new one.
+        try:
+            replacement = type(self)(paths if self._source_list else paths[0], self.notify, **self.source_kwargs)
+        except Exception as error:
+            self.subtitle.setText(str(error))
+            return
+        self._replacement = replacement
+        replacement.submit = self.submit
+        replacement.replacement_handler = self.replacement_handler
+        if self.replacement_handler:
+            self.replacement_handler(replacement)
+        else:
+            replacement.present()
+        replacement.move(self.pos())
+        self.close()
+
     def _enter(self):
         from PySide6.QtWidgets import QApplication
         fw = QApplication.focusWidget()
+        if isinstance(fw, QAbstractSpinBox) or isinstance(fw, QLineEdit) and isinstance(fw.parent(), QAbstractSpinBox):
+            spin = fw if isinstance(fw, QAbstractSpinBox) else fw.parent()
+            spin.interpretText()
+            spin.editingFinished.emit()
+            return
         if isinstance(fw, QLineEdit) and isinstance(fw.parent(), ImageView):
             fw.returnPressed.emit()   # Enter in an on-canvas text box finishes the text
             return
@@ -396,10 +443,7 @@ class CropWindow(ToolWindow):
         box = (x0, y0, x0 + w, y0 + h)
 
         def work():
-            im = open_image(path)
-            if rot:
-                im = im.rotate(-rot, expand=True)
-            return [imaging.save_like(im.crop(box), path, "Cropped")]
+            return [imaging.crop_image(path, box, rot)]
         extra = f"rotated {rot}°" if rot else ""
         self.run(work, "Cropping…", extra)
 
@@ -526,7 +570,7 @@ class AddBgWindow(ToolWindow):
                                          Qt.SmoothTransformation))
         fw = round(out.width / k)
         fh = round(out.height / k)
-        self.out_label.setText(f"Output  {dims_text(fw, fh)} px  ·  PNG")
+        self.out_label.setText(f"Output  {dims_text(fw, fh)} px  ·  " + ('GIF' if self.path.suffix.lower()=='.gif' else 'PNG'))
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
@@ -555,11 +599,9 @@ class AddBgWindow(ToolWindow):
         params, path = self._params(self._full_scale()), self.path
 
         def work():
-            out_im = imaging.add_background(open_image(path), params)
-            out = sibling(path, "With Background", ".png")
-            from .convert import save_image
-            save_image(out_im, out, "PNG")
-            return [out]
+            from .animation import transform_image
+            return [transform_image(path,'With Background',lambda im:imaging.add_background(im,params),
+                                    target='GIF' if path.suffix.lower()=='.gif' else 'PNG')]
         self.run(work, "Adding background…")
 
 
@@ -746,6 +788,7 @@ class AnnotateWindow(ToolWindow):
         self.stroke = slider(1, 20, 4)
         self.stroke.setFixedWidth(160)
         crow.addWidget(self.stroke)
+        crow.addWidget(value_editor(self.stroke,'Stroke size'))
         crow.addStretch(1)
         self.body.addLayout(crow)
         self.body.addLayout(self.footer("Save", self.save))
@@ -775,14 +818,17 @@ class AnnotateWindow(ToolWindow):
         extra = ", ".join(f"{n} {names[t]}{'s' if n > 1 else ''}" for t, n in counts.items())
 
         def work():
-            img = qimage_from_pil(open_image(path).convert("RGBA"))
-            p = QPainter(img)
-            p.setRenderHint(QPainter.Antialiasing)
-            p.setRenderHint(QPainter.TextAntialiasing)
-            for sh in shapes:
-                draw_shape(p, sh, lambda q: QPointF(q.x() * k, q.y() * k), k)
-            p.end()
-            return [imaging.save_like(pil_from_qimage(img), path, "Annotated")]
+            from .animation import transform_image
+            def annotate(frame):
+                img=qimage_from_pil(frame.convert('RGBA'))
+                p=QPainter(img)
+                p.setRenderHint(QPainter.Antialiasing)
+                p.setRenderHint(QPainter.TextAntialiasing)
+                for sh in shapes:
+                    draw_shape(p,sh,lambda q:QPointF(q.x()*k,q.y()*k),k)
+                p.end()
+                return pil_from_qimage(img)
+            return [transform_image(path,'Annotated',annotate)]
         self.run(work, "Saving annotations…", extra)
 
 
@@ -869,7 +915,8 @@ class RedactWindow(ToolWindow):
         label = {"black": "black boxes", "pixelate": "pixelated", "blur": "blurred"}[mode]
 
         def work():
-            return [imaging.save_like(imaging.redact(open_image(path), boxes, mode), path, "Redacted")]
+            from .animation import transform_image
+            return [transform_image(path,'Redacted',lambda im:imaging.redact(im,boxes,mode))]
         self.run(work, "Redacting…", f"{len(boxes)} area{'s' if len(boxes) != 1 else ''} {label}")
 
 
@@ -1013,7 +1060,7 @@ class EditWindow(ToolWindow):
         path = self.path
 
         def work():
-            return [imaging.save_like(imaging.apply_adjust(open_image(path), adj), path, "Edited")]
+            return [imaging.edit_image(path, adj)]
         self.run(work, "Applying edits…", self._summary())
 
 
@@ -1024,6 +1071,7 @@ class MetadataWindow(ToolWindow):
     def __init__(self, path, notify, is_pdf: bool = False):
         super().__init__("Metadata", path, notify, size=(640, 380))
         self.is_pdf = is_pdf
+        self.source_kwargs = {'is_pdf': is_pdf}
         info = imaging.read_pdf_metadata(path) if is_pdf else imaging.read_image_metadata(path)
         summary = {} if is_pdf else imaging.metadata_summary(path)
         self.n_fields, self.has_gps = (len(info), False) if is_pdf else imaging.count_metadata(path)

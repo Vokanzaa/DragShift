@@ -353,10 +353,19 @@ class RadialMenu(QWidget):
     def dropEvent(self, e):
         idx = self.hit(e.position())
         items = self.items
-        if 0 <= idx < len(items):
+        # The final OLE payload is authoritative. A cached dragEnter payload can
+        # belong to an earlier drag; never dispatch it after the file is released.
+        paths = resolve_shortcuts(self._local_paths(e.mimeData()))
+        item = items[idx] if 0 <= idx < len(items) else None
+        if item and paths:
+            available = [candidate for ring in self.build_rings(paths).values() for candidate in ring]
+            if not any(candidate.key == item.key for candidate in available):
+                e.ignore()
+                self.close_menu()
+                return
             e.setDropAction(Qt.CopyAction)
             e.accept()
-            item, paths = items[idx], list(self.paths)
+            paths = list(paths)
             self.hide()
             # return to Explorer's drag loop immediately; do the work after
             QTimer.singleShot(0, lambda: self.activated.emit(item, paths))

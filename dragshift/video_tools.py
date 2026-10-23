@@ -15,6 +15,7 @@ from .tools import ToolWindow, section, slider, slider_row
 from .theme import BORDER, ERROR, HOVER, MUTED, SELECTED, TEXT
 from .util import UserError, keep, release
 from .window import GlassWindow
+from .media_controls import TrimRange, value_editor
 
 VIDEO_STYLE = f"""
 QDoubleSpinBox, QPlainTextEdit {{ color: {TEXT}; background-color: #ffffff;
@@ -122,7 +123,8 @@ def _preview_label():
 def _show_frame(label, data):
     pix = QPixmap()
     if pix.loadFromData(data):
-        label.setPixmap(pix.scaled(max(240, label.width()), 176, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        height = min(176, label.maximumHeight()-18)
+        label.setPixmap(pix.scaled(max(120,label.width()-20),max(50,height),Qt.KeepAspectRatio,Qt.SmoothTransformation))
     else:
         label.setText("Frame preview unavailable")
 
@@ -153,6 +155,7 @@ class VideoToolWindow(_AsyncTools):
         super().__init__(f"Video · {mode}", paths, notify, (740, 730 if mode == "Edit" else 560))
         self.tool_name = mode
         self.mode = mode
+        self.source_kwargs = {'mode': mode}
         self.info = None
         self.preview_serial = 0
         self.details = QLabel("Reading video information…")
@@ -182,6 +185,11 @@ class VideoToolWindow(_AsyncTools):
             _field(self.form, "&Start", self.start_time)
             _field(self.form, "&End", self.end_time)
             self.start_time.valueChanged.connect(self._start_preview)
+            self.trim_range = TrimRange()
+            self.form.addRow(self.trim_range)
+            self.trim_range.changed.connect(self._range_changed)
+            self.start_time.valueChanged.connect(self._sync_range)
+            self.end_time.valueChanged.connect(self._sync_range)
         elif mode in ("Compress", "Resize"):
             self.max_side = QSpinBox()
             self.max_side.setRange(16, 7680)
@@ -218,8 +226,7 @@ class VideoToolWindow(_AsyncTools):
                 s = slider(lo, hi, value)
                 s.setAccessibleName(label)
                 setattr(self, key, s)
-                value_label = QLabel(str(value))
-                s.valueChanged.connect(value_label.setNum)
+                value_label = value_editor(s, label)
                 layout = QHBoxLayout()
                 layout.addWidget(s, 1)
                 layout.addWidget(value_label)
@@ -243,15 +250,23 @@ class VideoToolWindow(_AsyncTools):
                       else "Save the selected frame as a full-resolution PNG.")
         note.setWordWrap(True)
         note.setObjectName("dim")
+        self.output_note = note
         self.body.addWidget(note)
         if len(self.paths) > 1:
             batch = QLabel(f"Settings apply to all {len(self.paths)} videos. Preview shows the first.")
             batch.setWordWrap(True)
             self.body.addWidget(batch)
         if mode == "Edit":
-            hint = QLabel("Frame preview shows the source. Changes are applied when saving.")
+            hint = QLabel("Preview updates with rotation, crop, mirror and colour changes.")
             hint.setObjectName("dim")
             self.body.addWidget(hint)
+            for control in (self.rotation, self.crop):
+                control.currentIndexChanged.connect(self._schedule_preview)
+            self.flip.toggled.connect(self._schedule_preview)
+            for control in (self.brightness, self.contrast, self.saturation, self.speed):
+                control.valueChanged.connect(self._schedule_preview)
+        if mode in ('Compress', 'Resize'):
+            self.max_side.valueChanged.connect(self._schedule_preview)
         self.body.addWidget(self.error)
         text = "Save PNG" if mode == "Frame" else "Save without metadata" if mode == "Metadata" else "Save MP4"
         self.body.addLayout(self.footer(text, self.save))
@@ -271,6 +286,7 @@ class VideoToolWindow(_AsyncTools):
             self.start_time.setMaximum(i.duration)
             self.end_time.setMaximum(i.duration)
             self.end_time.setValue(i.duration)
+            self.trim_range.set_values(0, i.duration, i.duration)
         if self.mode == "Frame":
             self.frame_time.setMaximum(max(0, i.duration - 1 / i.fps))
         if self.mode in ("Compress", "Resize"):
@@ -286,11 +302,35 @@ class VideoToolWindow(_AsyncTools):
                 self.frame_time.blockSignals(True)
                 self.frame_time.setValue(at)
                 self.frame_time.blockSignals(False)
-            self._preview_timer.start()
+            self._schedule_preview()
 
     def _start_preview(self, value):
         if self.info:
             self.scrub.setValue(round(value / self.info.duration * 1000))
+
+    def _range_changed(self, start, end):
+        for spin, value in ((self.start_time, start), (self.end_time, end)):
+            spin.blockSignals(True)
+            spin.setValue(value)
+            spin.blockSignals(False)
+        self._start_preview(start if self.trim_range.active == 0 else max(start, end - 1/self.info.fps))
+
+    def _sync_range(self, *_):
+        if self.info:
+            self.trim_range.set_values(self.start_time.value(), self.end_time.value(), self.info.duration)
+
+    def _schedule_preview(self, *_):
+        self.preview_serial += 1  # invalidate before the debounce timer fires
+        self._preview_timer.start()
+
+    def preview_options(self):
+        if self.mode == 'Edit':
+            return dict(rotation=self.rotation.currentData(), crop_ratio=self.crop.currentData(),
+                        flip=self.flip.isChecked(), brightness=self.brightness.value()/100,
+                        contrast=self.contrast.value()/100, saturation=self.saturation.value()/100)
+        if self.mode in ('Resize', 'Compress'):
+            return dict(max_side=self.max_side.value())
+        return {}
 
     def _frame_time_changed(self, value):
         self._start_preview(value)
@@ -300,12 +340,14 @@ class VideoToolWindow(_AsyncTools):
             return
         at = min(self.info.duration - 1 / self.info.fps, self.scrub.value() / 1000 * self.info.duration)
         path = self.path
+        options = self.preview_options()
         self.preview_serial += 1
         serial = self.preview_serial
         def show(data):
             if serial == self.preview_serial:
                 _show_frame(self.preview, data)
-        self.lookup(lambda: video.preview_bytes(path, at), show, lambda msg: self.preview.setText("Frame preview unavailable"))
+        self.lookup(lambda: video.preview_bytes(path, at, **options), show,
+                    lambda msg: self.preview.setText("Frame preview unavailable") if serial == self.preview_serial else None)
 
     def validate(self):
         self.error.clear()
@@ -347,166 +389,258 @@ class VideoToolWindow(_AsyncTools):
         self.run(lambda: video.batch(paths, fn), "Processing video…")
 
 
-class DatamoshWindow(_AsyncTools):
-    tool_name = "Datamosh"
+class TelegramEmojiWindow(VideoToolWindow):
+    tool_name = 'Telegram emoji'
 
     def __init__(self, paths, notify):
-        super().__init__("Datamosh · A → B", paths[:2], notify, (800, 740))
+        super().__init__(paths, notify, 'Trim')
+        self.tool_name = 'Telegram emoji'
+        self.source_kwargs = {}
+        self.setWindowTitle('Telegram emoji — DragShift')
+        self.title_label.setText('Telegram emoji')
+        self.resize(740,650)
+        self.fit = QComboBox()
+        self.fit.addItem('Fit whole frame · transparent padding', 'fit')
+        self.fit.addItem('Fill square · centre crop', 'crop')
+        _field(self.form, 'Square framing', self.fit)
+        self.fit.currentIndexChanged.connect(self._schedule_preview)
+        hint = QLabel('WebM · VP9 · 100×100 · no sound · up to 3 seconds / 30 fps / 256 KB. '
+                      'Select the segment on the range slider. The exported file is checked automatically.')
+        hint.setWordWrap(True)
+        self.form.addRow(hint)
+        self.primary_btn.setText('Save Telegram emoji')
+        self.output_note.setText('Saves a new WebM ready for Telegram custom emoji.')
+
+    def accepts_sources(self, paths):
+        from .util import category
+        return bool(paths) and all(category(p)=='video' or p.suffix.lower()=='.gif' for p in paths)
+
+    def _loaded(self, data):
+        super()._loaded(data)
+        self.end_time.setValue(min(self.info.duration,3))
+
+    def _range_changed(self,start,end):
+        super()._range_changed(start,min(end,start+3))
+        self._sync_range()
+
+    def preview_options(self):
+        return dict(crop_ratio=1 if hasattr(self,'fit') and self.fit.currentData()=='crop' else None)
+
+    def save(self):
+        from . import telegram
+        if not self.validate():
+            return
+        length=self.end_time.value()-self.start_time.value()
+        if length>3.001:
+            self.error.setText('Choose a segment no longer than 3 seconds.')
+            return
+        paths=list(self.paths)
+        start,fit=self.start_time.value(),self.fit.currentData()
+        self.run(lambda:video.batch(paths,lambda p:telegram.export_emoji(p,start=start,duration=length,fit=fit)),
+                 'Creating Telegram emoji…')
+
+
+class DatamoshWindow(_AsyncTools):
+    tool_name = 'Datamosh'
+
+    def __init__(self, paths, notify):
+        from .media_controls import CurveEditor, DropZone, FileSequence
+        from .util import category
+        super().__init__('Datamosh · Melt', paths, notify, (800, 860))
+        self.infos = []
         self.first_info = self.second_info = None
-        self.second_path = self.paths[1] if len(self.paths) > 1 else None
-        self._second_serial = 0
-        intro = QLabel("Carry the last image of A into B's motion, then return to a clean B.")
+        self.second_path = None
+        self._load_generation = 0
+        self.accept_media = lambda p: category(p) == 'video' or p.suffix.lower() == '.gif'
+        intro = QLabel('Classic Melt carries one clip into the next. Drop clips below and drag rows to set their order.')
         intro.setWordWrap(True)
         self.body.addWidget(intro)
-        previews = QHBoxLayout()
+        audio_button = QPushButton('Audio file transitions…')
+        audio_button.clicked.connect(self.open_audio_transition)
+        self.sequence = FileSequence(paths, self.accept_media, video.VIDEO_FILTER)
+        self.sequence.list.setMaximumHeight(100)
+        self.body.addWidget(self.sequence)
+        row = QHBoxLayout()
         self.previews = []
         self.names = []
-        for title in ("A · END OF FIRST VIDEO", "B · START OF SECOND VIDEO"):
-            col = QVBoxLayout()
-            col.addWidget(section(title))
-            name = QLabel("Choose a second video…" if self.previews else self.path.name)
-            name.setWordWrap(True)
-            name.setObjectName("dim")
-            col.addWidget(name)
-            frame = _preview_label()
-            col.addWidget(frame)
-            previews.addLayout(col, 1)
-            self.previews.append(frame)
-            self.names.append(name)
-        self.body.addLayout(previews)
-        choose = QPushButton("Choose second video…")
-        choose.clicked.connect(self.choose_second)
-        self.body.addWidget(choose)
+        for index, title in enumerate(('First clip · drop to replace', 'Next clip · drop to replace')):
+            zone = DropZone(title, self.accept_media)
+            zone.setMaximumHeight(90)
+            zone.filesDropped.connect(lambda files, i=index: self.replace_clip(i, files))
+            row.addWidget(zone, 1)
+            self.previews.append(zone)
+        self.body.addLayout(row)
         self.form = QFormLayout()
         self.form.setVerticalSpacing(8)
+        self.excerpts = QCheckBox('Use only the end of A and beginning of B (two clips)')
+        self.excerpts.setChecked(len(paths) <= 2)
+        self.form.addRow(self.excerpts)
         self.tail, self.head, self.duration = _seconds(4), _seconds(6), _seconds(2)
         self.tail.setMinimum(.2)
         self.head.setMinimum(.2)
         self.duration.setMinimum(.1)
+        _field(self.form, 'Last seconds of A', self.tail)
+        _field(self.form, 'First seconds of B', self.head)
+        _field(self.form, 'Transition duration at each cut', self.duration)
         self.preset = QComboBox()
-        self.preset.addItems(datamosh.PRESETS)
-        self.preset.setCurrentText("Melt")
-        self.strength = slider(1, 100, 65)
-        strength_row = QHBoxLayout()
-        strength_value = QLabel("65")
-        strength_value.setMinimumWidth(28)
-        self.strength.valueChanged.connect(strength_value.setNum)
-        self.strength.setAccessibleName("Datamosh intensity")
-        strength_row.addWidget(self.strength)
-        strength_row.addWidget(strength_value)
+        self.preset.addItem('Melt')
+        self.preset.setEnabled(False)
+        self.strength = slider(0,100,65)
+        self.strength.setAccessibleName('Datamosh intensity')
+        row = QHBoxLayout()
+        row.addWidget(self.strength,1)
+        row.addWidget(value_editor(self.strength,'Datamosh intensity',lambda v:f'{v}%'))
+        self.form.addRow('Intensity',row)
         self.resolution = QComboBox()
-        for px in (360, 720, 1080, 1440, 2160):
-            self.resolution.addItem(f"{px} px · longest edge", px)
+        for px in (360,720,1080,1440,2160):
+            self.resolution.addItem(f'{px} px · longest edge',px)
         self.resolution.setCurrentIndex(1)
         self.fps = QComboBox()
-        for fps in (24, 25, 30, 60):
-            self.fps.addItem(f"{fps} fps", fps)
+        for rate in (24,25,30,60):
+            self.fps.addItem(f'{rate} fps',rate)
         self.fps.setCurrentIndex(2)
-        _field(self.form, "&Last seconds of A", self.tail)
-        _field(self.form, "&First seconds of B", self.head)
-        _field(self.form, "&Transition duration", self.duration)
-        _field(self.form, "&Preset", self.preset)
-        self.form.addRow("Intensity", strength_row)
-        _field(self.form, "&Resolution", self.resolution)
-        _field(self.form, "Frame rate", self.fps)
-        self.audio = QCheckBox("Keep audio from both selected segments")
+        _field(self.form,'Resolution',self.resolution)
+        _field(self.form,'Frame rate',self.fps)
+        self.audio = QCheckBox('Keep audio from selected clips')
         self.audio.setChecked(True)
-        self.form.addRow("", self.audio)
-        self.note = QLabel("FFglitch motion vectors + keyframe removal · Export: MP4\n"
-            "Motion-rich footage gives stronger results. B returns cleanly after the transition.\n"
-            "Preview renders a short 480 px excerpt; open it from the result notification.")
-        self.note.setObjectName("dim")
-        self.note.setWordWrap(True)
-        self.body.addWidget(_scroll_panel(self.form, self.note), 1)
+        self.form.addRow(self.audio)
+        self.curve = CurveEditor()
+        note = QLabel('Double-click the curve to add points; drag them or type their position and strength. '
+                      'Vertical marks show clip changes. Zero is clean video. Each transition returns to a clean image. '
+                      'Preview uses the same timeline and curve at 480 px; open it from the result notification.')
+        note.setWordWrap(True)
+        note.setObjectName('dim')
+        self.body.addWidget(_scroll_panel(self.form,note),1)
+        self.body.addWidget(QLabel('Strength over the output timeline'))
+        self.body.addWidget(self.curve)
         self.body.addWidget(self.error)
-        self.preview_btn = QPushButton("Render preview")
-        self.preview_btn.clicked.connect(lambda: self.save(preview=True))
-        self.body.addLayout(self.footer("Create transition", self.save, extra_buttons=(self.preview_btn,)))
+        self.preview_btn = QPushButton('Render preview')
+        self.preview_btn.clicked.connect(lambda:self.save(preview=True))
+        self.body.addLayout(self.footer('Create Melt video',self.save,extra_buttons=(audio_button,self.preview_btn)))
+        self.sequence.changed.connect(self.reload_sequence)
+        self.excerpts.toggled.connect(self._mode_changed)
+        self.tail.valueChanged.connect(self._timeline)
+        self.head.valueChanged.connect(self._timeline)
+        self.reload_sequence(self.sequence.paths())
+
+    def accepts_sources(self, paths):
+        return bool(paths) and all(self.accept_media(p) for p in paths)
+
+    def open_audio_transition(self):
+        from . import audio
+        from .audio_tools import AudioTransitionWindow
+        paths,_ = QFileDialog.getOpenFileNames(self,'Choose sounds for a transition',str(self.path.parent),audio.AUDIO_FILTER)
+        if not paths:
+            return
+        window = AudioTransitionWindow(paths,self.notify)
+        window.submit = self.submit
+        self._audio_window = window
+        if self.replacement_handler:
+            self.replacement_handler(window)
+        else:
+            window.present()
+
+    def receive_files(self, paths):
+        self.sequence.add(paths)
+
+    def replace_clip(self, index, files):
+        from PySide6.QtWidgets import QListWidgetItem
+        if index < self.sequence.list.count():
+            item = self.sequence.list.item(index)
+            item.setText(files[0].name)
+            item.setToolTip(str(files[0]))
+            item.setData(Qt.UserRole,str(files[0]))
+            if len(files)>1:
+                self.sequence.add(files[1:])
+            else:
+                self.reload_sequence(self.sequence.paths())
+        else:
+            self.sequence.add(files)
+
+    def reload_sequence(self, paths):
+        self._load_generation += 1
+        generation = self._load_generation
+        self.paths = list(paths)
+        self.infos = []
+        self.first_info = self.second_info = None
         self.primary_btn.setEnabled(False)
         self.preview_btn.setEnabled(False)
-        first = self.path
-        def load_first():
-            info = video.probe(first)
-            return info, video.preview_bytes(first, max(0, info.duration - .15))
-        self.lookup(load_first, self._first_loaded)
-        if self.second_path:
-            self.load_second(self.second_path)
-
-    def _first_loaded(self, data):
-        self.first_info, frame = data
-        self.tail.setMaximum(self.first_info.duration)
-        self.tail.setValue(min(4, self.first_info.duration))
-        self.names[0].setText(f"{self.path.name} · {video.time_text(self.first_info.duration)}")
-        _show_frame(self.previews[0], frame)
-        self._enable()
-
-    def choose_second(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Choose video B", str(self.path.parent), video.VIDEO_FILTER)
-        if path:
-            self.load_second(Path(path))
-
-    def load_second(self, path):
-        self._second_serial += 1
-        serial = self._second_serial
-        self.second_path = Path(path)
-        self.second_info = None
         self.error.clear()
-        self.names[1].setText(self.second_path.name)
-        self.previews[1].setText("Reading video…")
-        self._enable()
-        def loaded(data):
-            if serial != self._second_serial:
+        self.excerpts.setEnabled(len(paths)==2)
+        if len(paths)!=2:
+            self.excerpts.setChecked(False)
+        if not paths:
+            self.error.setText('Drop at least two clips here.')
+            return
+        self.path = paths[0]
+        self.subtitle.setText(f'{len(paths)} clips · ' + ' → '.join(p.name for p in paths))
+        if len(paths)>16:
+            self.error.setText('Use up to 16 clips in one series.')
+            return
+        def load():
+            infos = [video.probe(p) for p in paths]
+            frames = [video.preview_bytes(paths[0],max(0,infos[0].duration-.15))]
+            if len(paths)>1:
+                frames.append(video.preview_bytes(paths[1]))
+            return infos,frames
+        def done(data):
+            if generation!=self._load_generation:
                 return
-            self.second_info, frame = data
-            self.names[1].setText(f"{path.name} · {video.time_text(self.second_info.duration)}")
-            self.head.setMaximum(self.second_info.duration)
-            self.head.setValue(min(6, self.second_info.duration))
-            self.duration.setValue(min(2, max(.1, self.second_info.duration / 2)))
-            _show_frame(self.previews[1], frame)
-            self._enable()
-        self.lookup(lambda: (video.probe(path), video.preview_bytes(path)), loaded)
+            self.infos,frames = data
+            self.first_info = self.infos[0]
+            self.second_info = self.infos[1] if len(self.infos)>1 else None
+            self.second_path = paths[1] if len(paths)>1 else None
+            for zone,frame,path in zip(self.previews,frames,paths):
+                _show_frame(zone,frame)
+                zone.setToolTip(str(path)+' · Drop to replace')
+            self.tail.setMaximum(self.infos[0].duration)
+            self.tail.setValue(min(4,self.infos[0].duration))
+            if self.second_info:
+                self.head.setMaximum(self.second_info.duration)
+                self.head.setValue(min(6,self.second_info.duration))
+                self.duration.setValue(min(2,max(.1,min(i.duration for i in self.infos[1:])/2)))
+            self._mode_changed()
+            self.primary_btn.setEnabled(len(paths)>=2)
+            self.preview_btn.setEnabled(len(paths)>=2)
+        self.lookup(load,done,lambda msg:self.error.setText(msg) if generation==self._load_generation else None)
 
-    def _enable(self):
-        enabled = self.first_info is not None and self.second_info is not None
-        self.primary_btn.setEnabled(enabled)
-        self.preview_btn.setEnabled(enabled)
+    def _mode_changed(self,*_):
+        self.tail.setEnabled(self.excerpts.isChecked())
+        self.head.setEnabled(self.excerpts.isChecked())
+        self._timeline()
+
+    def _timeline(self,*_):
+        if len(self.infos)<2:
+            return
+        lengths = [self.tail.value(),self.head.value()] if self.excerpts.isChecked() else [i.duration for i in self.infos]
+        total=sum(lengths)
+        self.curve.curve.markers=[sum(lengths[:i])/total for i in range(1,len(lengths))]
+        self.curve.curve.update()
 
     def validate(self):
         self.error.clear()
-        if not self.first_info or not self.second_info:
+        if len(self.infos)<2:
             return False
-        if self.duration.value() > self.head.value() - .1:
-            self.error.setText("The transition must end at least 0.1 seconds before the selected B segment ends.")
-            self.duration.setFocus()
-            return False
-        try:
-            video.executable("ffgac")
-            video.executable("ffedit")
-        except UserError as e:
-            self.error.setText(str(e))
+        limit = self.head.value() if self.excerpts.isChecked() else min(i.duration for i in self.infos[1:])
+        if self.duration.value()>limit-3/self.fps.currentData():
+            self.error.setText('Leave at least two clean frames after each transition. Shorten the transition or choose longer clips.')
             return False
         return True
 
-    def save(self, checked=False, *, preview=False):
+    def save(self,checked=False,*,preview=False):
         if not self.validate():
             return
-        opts = dict(tail=self.tail.value(), head=self.head.value(), duration=self.duration.value(),
-            strength=self.strength.value(), preset=self.preset.currentText(),
-            max_side=self.resolution.currentData(), audio=self.audio.isChecked(), fps=self.fps.currentData())
-        if preview:
-            opts.update(tail=min(opts["tail"], 1.5), duration=min(opts["duration"], 3), max_side=480)
-            opts["head"] = min(opts["head"], opts["duration"] + .75)
-        a, b = self.path, self.second_path
-        fn = lambda: datamosh.transition(a, b, **opts)
+        paths=list(self.paths)
+        opts=dict(duration=self.duration.value(),strength=self.strength.value(),curve=self.curve.points(),
+                  excerpts=self.excerpts.isChecked(),tail=self.tail.value(),head=self.head.value(),
+                  max_side=480 if preview else self.resolution.currentData(),audio=self.audio.isChecked(),fps=self.fps.currentData())
+        fn=lambda:datamosh.sequence(paths,**opts)
         if self.submit:
-            self.submit("tool:Datamosh", [str(a), str(b)], fn, "Creating Datamosh transition…",
-                        ("Preview · " if preview else "") + opts["preset"])
+            self.submit('tool:Datamosh',[str(p) for p in paths],fn,'Creating Melt series…','Preview · Melt' if preview else 'Melt')
             if not preview:
                 self.close()
         else:
-            # Standalone test harnesses still get the same processing behaviour.
-            outs = fn()
-            self.notify("tool:Datamosh", [str(a), str(b)], outs, opts["preset"])
+            self.notify('tool:Datamosh',[str(p) for p in paths],fn(),'Melt')
 
 
 class _RenderSignals(QObject):

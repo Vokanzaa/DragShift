@@ -73,6 +73,8 @@ def summarize(action: str, srcs: list, outs: list, extra: str = "") -> Result:
 
     if action == "tool:Pack":
         return Result("Archive created", f"{o0.name} · {human_size(after)}", outs, srcs)
+    if action == 'tool:Telegram emoji':
+        return Result('Telegram emoji created',f'{o0.name} · WebM / VP9 · 100×100 · {human_size(after)}',outs,srcs)
 
     if category(src) == "audio" or (category(src) == "video" and category(o0) == "audio"):
         from . import audio, video

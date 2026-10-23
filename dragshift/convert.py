@@ -123,10 +123,11 @@ def atomic_save(write, out):
 
 def image_to(src: str | Path, target: str) -> list[Path]:
     target = target.upper()
-    im = open_image(src)
-    out = sibling(src, ext="." + target.lower())
-    save_image(im, out, target)
-    return [out]
+    if target in ('MP4', 'WEBM', 'MOV', 'MKV', 'AVI'):
+        from .video import convert_video
+        return convert_video(src, target)
+    from .animation import transform_image
+    return [transform_image(src, '', target=target)]
 
 
 def images_to_single_pdf(srcs: list[str | Path]) -> list[Path]:
@@ -369,6 +370,8 @@ def targets_for(cat: str, src_ext: str) -> list[str]:
         return [t for t in TARGETS if t != cur]
     if cat == "image":
         t = [x for x in IMAGE_TARGETS if x != cur]
+        if cur in ('GIF', 'WEBP', 'PNG', 'AVIF'):
+            t += ['MP4', 'WEBM'] if cur == 'GIF' else []
         if not HEIF_OK:
             t = [x for x in t if x != "HEIC"]
         return t

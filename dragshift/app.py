@@ -52,10 +52,10 @@ VIDEO_GLYPHS = {"Trim": "✂", "Mute": "♪", "Frame": "▣", "Datamosh": "≈",
 VIDEO_HINTS = {"Trim": "Choose in · out", "Compress": "Smaller MP4", "Resize": "Change dimensions",
                "Edit": "Rotate · crop · speed · colour", "Mute": "Remove audio", "Frame": "Save a PNG frame",
                "Metadata": "View · remove tags", "Datamosh": "Melt video A into B", "Audio": "Extract sound · any format"}
-AUDIO_TOOLS = ["Trim", "Edit", "Normalize", "Fade", "Compress", "Reverse", "Metadata"]
+AUDIO_TOOLS = ["Trim", "Edit", "Normalize", "Fade", "Compress", "Reverse", "Transition", "Metadata"]
 AUDIO_HINTS = {"Trim": "Choose in · out", "Edit": "Volume · speed · channels", "Normalize": "Consistent loudness",
                "Fade": "Smooth start · end", "Compress": "Smaller audio file", "Reverse": "Play backwards",
-               "Metadata": "View · remove tags"}
+               "Metadata": "View · remove tags", "Transition": "Blend an ordered audio series"}
 FORMAT_HINTS.update({"MP4": "H.264 · universal", "MKV": "Matroska · H.264", "MOV": "QuickTime · H.264",
                      "WEBM": "VP9 · web video", "AVI": "MPEG-4 · legacy", "MP3": "Audio only", "WAV": "Uncompressed audio"})
 FORMAT_HINTS.update({"FLAC": "Lossless audio", "M4A": "AAC · phones", "AAC": "Compact audio",
@@ -262,6 +262,8 @@ class DragShiftApp(QObject):
                 hint = f"{len(same)} images → 1 PDF"
             convert_items.append(Item(t, key=f"convert:{t}", hint=hint))
         rings: dict[str, list[Item]] = {"Convert": convert_items}
+        if cat == 'video' or cat == 'image' and ext.lower() == '.gif':
+            convert_items.append(Item('TG Emoji', key='tool:Telegram emoji', hint='100×100 · VP9 · up to 3 s · ≤256 KB'))
         if cat == "image":
             rings["Tools"] = [Item(n, GLYPHS[n], key=f"tool:{n}", hint=HINTS[n]) for n in IMAGE_TOOLS]
         elif cat == "pdf":
@@ -274,7 +276,7 @@ class DragShiftApp(QObject):
             rings["Tools"] = [Item(n, VIDEO_GLYPHS.get(n, GLYPHS.get(n, "")), key=f"tool:{n}",
                                    hint=VIDEO_HINTS[n]) for n in VIDEO_TOOLS]
         elif cat == "audio":
-            glyphs = {"Normalize": "≋", "Fade": "◢", "Reverse": "↶"}
+            glyphs = {"Normalize": "≋", "Fade": "◢", "Reverse": "↶", "Transition": "≈"}
             rings["Tools"] = [Item(n, glyphs.get(n, VIDEO_GLYPHS.get(n, GLYPHS.get(n, ""))),
                                     key=f"tool:{n}", hint=AUDIO_HINTS[n]) for n in AUDIO_TOOLS]
         elif cat == "archive":
@@ -292,6 +294,10 @@ class DragShiftApp(QObject):
         cat = category(paths[0])
         paths = [p for p in paths if category(p) == cat]
         kind, name = item.key.split(":", 1)
+        if name == 'Telegram emoji':
+            from .video_tools import TelegramEmojiWindow
+            self.open_window(TelegramEmojiWindow(paths, self.notify))
+            return
         if kind == "convert":
             if cat in ("video", "audio", "archive"):
                 self.submit(f"convert:{name}", paths,
@@ -314,8 +320,9 @@ class DragShiftApp(QObject):
                              else VideoToolWindow(paths, self.notify, name))
             return
         if cat == "audio":
-            from .audio_tools import AudioToolWindow
-            self.open_window(AudioToolWindow(paths, self.notify, name))
+            from .audio_tools import AudioToolWindow, AudioTransitionWindow
+            self.open_window(AudioTransitionWindow(paths, self.notify) if name == 'Transition'
+                             else AudioToolWindow(paths, self.notify, name))
             return
         if cat == "archive":
             from . import archives
@@ -358,6 +365,8 @@ class DragShiftApp(QObject):
     def open_window(self, w: QWidget):
         if hasattr(w, "submit"):
             w.submit = self.submit
+        if isinstance(w, tools.ToolWindow):
+            w.replacement_handler = self.open_window
         self.windows.append(w)
         w.destroyed.connect(lambda *_: self.windows.remove(w) if w in self.windows else None)
         if hasattr(w, "present"):
@@ -372,7 +381,8 @@ class DragShiftApp(QObject):
 
     def submit(self, action: str, srcs: list, fn, working: str = "Working…", extra: str = ""):
         """Run in the background. A spinner card appears only if it takes > 150 ms."""
-        if action == "tool:Pack" or any(category(p) in ("video", "audio", "archive") for p in srcs):
+        if action in ("tool:Pack", "tool:Telegram emoji") or any(category(p) in ("video", "audio", "archive")
+                or str(p).lower().endswith('.gif') for p in srcs):
             from .video_tools import VideoProgressWindow
             window = VideoProgressWindow(action, srcs, fn, lambda r: self.toasts.new().done(r), extra)
             self.open_window(window)

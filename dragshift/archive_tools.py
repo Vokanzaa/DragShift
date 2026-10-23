@@ -14,6 +14,7 @@ class ArchivePackWindow(_AsyncTools):
         super().__init__("Pack files", paths, notify, (600, 460))
         self.subtitle.setText(f"{len(self.paths)} selected item(s) · one archive")
         selected = QListWidget()
+        self.selected = selected
         selected.setAccessibleName("Selected files and folders")
         for path in self.paths[:100]:
             selected.addItem(str(path) + ('/' if path.is_dir() else ''))
@@ -45,10 +46,26 @@ class ArchivePackWindow(_AsyncTools):
         paths, target = list(self.paths), self.target.currentText()
         self.run(lambda: archives.pack(paths, target), f"Creating {target} archive…")
 
+    def accepts_sources(self,paths):
+        return bool(paths)
+
+    def receive_files(self,paths):
+        try:
+            sources=archives.packing_sources(self.paths+list(paths))
+            self.paths=list(sources)
+            self.selected.clear()
+            self.selected.addItems([str(p)+('/' if p.is_dir() else '') for p in self.paths])
+            self.subtitle.setText(f'{len(self.paths)} selected item(s) · one archive')
+            self.destination.setText('Save to: '+str(archives.packing_directory(sources)))
+            self.error.clear()
+            self.primary_btn.setEnabled(True)
+        except UserError as error:
+            self.error.setText(str(error))
 
 class ArchiveContentsWindow(_AsyncTools):
     def __init__(self, path, notify):
         super().__init__("Archive contents", [path], notify, (760, 580))
+        self._source_list = False
         self.table = QTableWidget(0, 2)
         self.table.setHorizontalHeaderLabels(["Name", "Size"])
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)

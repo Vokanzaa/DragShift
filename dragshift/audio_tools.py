@@ -7,6 +7,8 @@ from PySide6.QtWidgets import QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout,
 
 from . import audio, video
 from .video_tools import _AsyncTools, _field, _scroll_panel, _seconds, SPIN_STYLE
+from .media_controls import FileSequence
+from .util import category
 
 
 class AudioToolWindow(_AsyncTools):
@@ -14,6 +16,7 @@ class AudioToolWindow(_AsyncTools):
         super().__init__(f"Audio · {mode}", paths, notify, (720, 670 if mode == "Edit" else 500))
         self.tool_name = mode
         self.mode = mode
+        self.source_kwargs = {'mode': mode}
         self.info = None
         self.details = QLabel("Reading audio information…")
         self.details.setWordWrap(True)
@@ -160,3 +163,79 @@ class AudioToolWindow(_AsyncTools):
             return
         paths, opts = list(self.paths), self.options()
         self.run(lambda: video.batch(paths, lambda p: audio.transform(p, **opts)), "Processing audio…")
+
+
+class AudioTransitionWindow(_AsyncTools):
+    tool_name='Audio transition'
+
+    def __init__(self,paths,notify):
+        super().__init__('Audio transitions',paths,notify,(720,530))
+        self.infos=[]
+        self._generation=0
+        intro=QLabel('Blend the end of each sound into the beginning of the next. Drop files below and drag rows to set their order.')
+        intro.setWordWrap(True)
+        self.body.addWidget(intro)
+        self.sequence=FileSequence(paths,lambda p:category(p)=='audio',audio.AUDIO_FILTER)
+        self.body.addWidget(self.sequence)
+        self.details=QLabel()
+        self.details.setWordWrap(True)
+        self.body.addWidget(self.details)
+        form=QFormLayout()
+        self.duration=_seconds(.75)
+        self.duration.setMinimum(.05)
+        self.duration.setMaximum(60)
+        _field(form,'Transition at each cut',self.duration)
+        self.target=QComboBox()
+        self.target.addItems(audio.TARGETS)
+        self.target.setCurrentText('M4A')
+        _field(form,'Save as',self.target)
+        self.body.addLayout(form)
+        self.body.addStretch()
+        self.body.addWidget(self.error)
+        self.body.addLayout(self.footer('Create audio transitions',self.save))
+        self.sequence.changed.connect(self.load)
+        self.duration.valueChanged.connect(self.update_details)
+        self.load(self.sequence.paths())
+
+    def accepts_sources(self,paths):
+        return bool(paths) and all(category(p)=='audio' for p in paths)
+
+    def receive_files(self,paths):
+        self.sequence.add(paths)
+
+    def load(self,paths):
+        self._generation+=1
+        generation=self._generation
+        self.paths=list(paths)
+        self.infos=[]
+        self.primary_btn.setEnabled(False)
+        self.error.clear()
+        if not paths:
+            self.details.setText('Drop at least two audio files.')
+            return
+        self.path=paths[0]
+        def done(infos):
+            if generation!=self._generation:
+                return
+            self.infos=infos
+            limit=min(i.duration/(2 if 0<n<len(infos)-1 else 1) for n,i in enumerate(infos))-.03
+            self.duration.setValue(min(.75,max(.05,limit)))
+            self.primary_btn.setEnabled(2<=len(paths)<=16)
+            self.update_details()
+        self.lookup(lambda:[audio.probe(p) for p in paths],done,
+                    lambda msg:self.error.setText(msg) if generation==self._generation else None)
+
+    def update_details(self,*_):
+        if self.infos:
+            length=sum(i.duration for i in self.infos)-self.duration.value()*(len(self.infos)-1)
+            self.details.setText(f'{len(self.infos)} clips → {video.time_text(length)} · stereo · overlapping crossfades')
+
+    def save(self):
+        if len(self.infos)<2:
+            return
+        duration=self.duration.value()
+        if any(i.duration<=duration*(2 if 0<n<len(self.infos)-1 else 1)+.02 for n,i in enumerate(self.infos)):
+            self.error.setText('Shorten the crossfade: middle clips need room for two fades.')
+            return
+        paths,target=list(self.paths),self.target.currentText()
+        self.run(lambda:audio.transition(paths,duration=duration,target=target),'Creating audio transitions…')
