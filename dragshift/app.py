@@ -33,7 +33,7 @@ IPC_NAME = ipc_name()
 
 GLYPHS = {"Compress": "⇲", "Metadata": "ⓘ", "Redact": "▮", "Crop": "⌗", "Edit": "☼",
           "Annotate": "✎", "Add BG": "▣", "Resize": "⤢", "Split": "✂", "Rotate": "⟳",
-          "Merge": "⧉", "Protect": "⚿", "Extract": "⧈", "Distort": "⌁"}
+          "Merge": "⧉", "Protect": "⚿", "Extract": "⧈", "Distort": "⌁", "Interlace": "▥"}
 
 HINTS = {
     "Compress": "Shrink file size", "Metadata": "View · remove GPS", "Redact": "Hide private info",
@@ -41,13 +41,14 @@ HINTS = {
     "Add BG": "Gradient backdrop", "Resize": "Change dimensions", "Split": "One PDF per page",
     "Rotate": "Turn pages 90°", "Merge": "Join into one PDF", "Protect": "Add a password",
     "Extract": "Save embedded images", "Distort": "Content-aware distortion · GIF / video / frame",
+    "Interlace": "Lenticular images · fitting · print",
 }
 FORMAT_HINTS = {"JPG": "Small, universal", "PNG": "Lossless · transparency", "WEBP": "Smallest for web",
                 "HEIC": "iPhone format", "TIFF": "Print · archival", "AVIF": "Next-gen, tiny",
                 "BMP": "Uncompressed", "PDF": "Document", "ICO": "Windows icon", "GIF": "Legacy web",
                 "DOCX": "Editable Word", "TXT": "Plain text"}
 
-IMAGE_TOOLS = ["Compress", "Resize", "Crop", "Edit", "Annotate", "Redact", "Add BG", "Distort", "Metadata"]
+IMAGE_TOOLS = ["Compress", "Resize", "Crop", "Edit", "Annotate", "Redact", "Add BG", "Distort", "Interlace", "Metadata"]
 PDF_TOOLS = ["Compress", "Split", "Rotate", "Protect", "Extract", "Metadata"]
 VIDEO_TOOLS = ["Trim", "Compress", "Resize", "Edit", "Mute", "Frame", "Distort", "Metadata", "Datamosh", "Audio"]
 VIDEO_GLYPHS = {"Trim": "✂", "Mute": "♪", "Frame": "▣", "Datamosh": "≈", "Audio": "♫"}
@@ -259,6 +260,8 @@ class DragShiftApp(QObject):
 
     def build_rings(self, paths: list[str]) -> dict[str, list[Item]]:
         pack = Item("Pack", "▣", key="tool:Pack", hint="Create one ZIP or 7Z archive")
+        if Path(paths[0]).suffix.lower() == '.dshift-print':
+            return {"Tools": [Item('Interlace', GLYPHS['Interlace'], key='tool:Interlace', hint=HINTS['Interlace']), pack]}
         cat = None if Path(paths[0]).is_dir() else category(paths[0])
         if cat is None:
             return {"Tools": [pack]}
@@ -296,6 +299,10 @@ class DragShiftApp(QObject):
 
     # ------------------------------------------------------------ actions
     def run_item(self, item: Item, paths: list[str]):
+        if item.key == 'tool:Interlace':
+            from .lenticular_tools import LenticularWindow
+            self.open_window(LenticularWindow(paths, self.notify))
+            return
         if item.key == "tool:Pack":
             from .archive_tools import ArchivePackWindow
             self.open_window(ArchivePackWindow(paths, self.notify))
@@ -321,7 +328,7 @@ class DragShiftApp(QObject):
             else:
                 verb = f"Converting to {name}…"
                 self.submit(f"convert:{name}", paths,
-                            lambda: [o for p in paths for o in convert.convert(p, cat, name)], verb)
+                            lambda: video.batch(paths, lambda p: convert.convert(p, cat, name)), verb)
             return
         if cat == "video":
             if name=='Resize':
@@ -402,7 +409,7 @@ class DragShiftApp(QObject):
 
     def submit(self, action: str, srcs: list, fn, working: str = "Working…", extra: str = ""):
         """Run in the background. A spinner card appears only if it takes > 150 ms."""
-        if action in ("tool:Pack", "tool:Telegram emoji", "tool:Distort") or any(category(p) in ("video", "audio", "archive")
+        if action in ("tool:Pack", "tool:Telegram emoji", "tool:Distort", "tool:Interlace", "tool:Print interlace") or any(category(p) in ("video", "audio", "archive")
                 or str(p).lower().endswith('.gif') for p in srcs):
             from .video_tools import VideoProgressWindow
             window = VideoProgressWindow(action, srcs, fn, lambda r: self.toasts.new().done(r), extra)

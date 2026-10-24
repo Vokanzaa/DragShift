@@ -39,6 +39,28 @@ def selftest():
             cropped=imaging.crop_image(gif,(5,5,65,45))
             with Image.open(cropped) as image:
                 assert image.format=='GIF' and image.n_frames==2 and image.size==(60,40)
+            for target in ('PNG', 'JPG'):
+                frames_folder = convert.image_to(gif, target)[0]
+                assert frames_folder.parent == gif.parent and frames_folder.is_dir()
+                frames = sorted(frames_folder.iterdir())
+                assert len(frames) == 2
+                with Image.open(frames[1]) as image:
+                    assert image.getpixel((40,30))[:3][2] > 240
+            from . import lenticular as lens
+            from .lenticular_tools import LenticularWindow
+            first_image, second_image = base/'first.png', base/'second.webp'
+            Image.new('RGB',(120,80),'red').save(first_image)
+            Image.new('RGB',(80,120),'blue').save(second_image,lossless=True)
+            project = lens.Project([lens.Frame(first_image), lens.Frame(second_image)],
+                                   lens.Settings(width_mm=25.4, quality=1))
+            interlace, geometry = lens.render(project)
+            assert interlace.size == (120,80)
+            assert interlace.getpixel((0,0)) == (0,0,255) and interlace.getpixel((1,0)) == (255,0,0)
+            assert lens.printer_raster(interlace,geometry,(600,600)).size == (600,400)
+            project_path = base/'test.dshift-print'
+            lens.save_project(project,project_path)
+            assert lens.load_project(project_path) == project
+            assert len(lens.export(project)) == 2
             animated_video=convert.image_to(gif,'WEBM')[0]
             assert .55<video.probe(animated_video).duration<.65
             emoji=telegram.export_emoji(gif)[0]
@@ -86,20 +108,22 @@ def selftest():
             assert not hasattr(DragShiftApp, "open_converter")
             windows = [AudioToolWindow([str(sound)], lambda *_: None),
                        ArchiveContentsWindow(str(source), lambda *_: None),
-                       ArchivePackWindow([selected_folder, sound], lambda *_: None)]
+                       ArchivePackWindow([selected_folder, sound], lambda *_: None),
+                       LenticularWindow([project_path], lambda *_: None)]
             deadline = time.monotonic() + 15
             while time.monotonic() < deadline:
                 QApplication.processEvents()
-                if windows[0].info is not None and windows[1].table.rowCount():
+                if windows[0].info is not None and windows[1].table.rowCount() and windows[3].primary_btn.isEnabled():
                     break
                 time.sleep(.01)
             assert windows[0].primary_btn.isEnabled() and windows[1].table.rowCount() == 1
             assert windows[2].primary_btn.isEnabled() and windows[2].target.currentText() == "ZIP"
+            assert windows[3].primary_btn.isEnabled() and len(windows[3].project.frames) == 2
             for window in windows:
                 window.close()
             menu.close()
             QApplication.processEvents()
-        print("FILES SELFTEST OK · Liquid Rescale/selected frame, audio glitch/transitions, GIF animation/crop, Telegram emoji, audio, archives, ZIP/7Z, deliberate ring input, pixel resize/crop and Melt series", flush=True)
+        print("FILES SELFTEST OK · distortion, audio glitch/transitions, GIF animation/crop/all frames, Telegram emoji, archives, ZIP/7Z, deliberate ring input, pixel resize/crop, Melt series, lenticular project/export/printer raster/editor", flush=True)
         return 0
     except Exception:
         import traceback

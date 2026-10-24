@@ -81,104 +81,70 @@ def curve_expression(points, total, variable='T'):
 
 
 def transition(first, second, *, tail=4., head=6., duration=2., strength=65,
-               preset='Melt', max_side=720, audio=True, fps=30, curve=None):
+               preset="Melt", max_side=720, audio=True, fps=30) -> list[Path]:
     if preset != 'Melt':
         raise UserError('Only classic Melt is available.')
-    return sequence([first,second], tail=tail, head=head, duration=duration, strength=strength,
-                    max_side=max_side, audio=audio, fps=fps, curve=curve, excerpts=True)
+    a, b = video.probe(first), video.probe(second)
+    values = (tail, head, duration, strength, max_side, fps)
+    if (not all(math.isfinite(v) for v in values) or not .2 <= tail <= a.duration + .05
+            or not .2 <= head <= b.duration + .05 or not .1 <= duration <= head - .1
+            or not 1 <= strength <= 100 or not 64 <= max_side <= 2160
+            or preset not in PRESETS or fps not in (24, 25, 30, 60)):
+        raise UserError("Choose valid clip ranges. The transition must finish at least 0.1 seconds before clip B ends.")
+    ffgac, ffedit = video.executable("ffgac"), video.executable("ffedit")
+    tail, head = min(tail, a.duration), min(head, b.duration)
+    af, bf, bridge = round(tail * fps), round(head * fps), max(1, round(duration * fps))
+    if bf <= bridge + 1:
+        raise UserError("Leave at least two clean frames after the transition in clip B.")
+    tail, head, duration = af / fps, bf / fps, bridge / fps
+    a_start = max(0., a.duration - tail)
+    scale = min(1., max_side / max(a.display_width, a.display_height))
+    w, h = max(2, round(a.display_width * scale / 2) * 2), max(2, round(a.display_height * scale / 2) * 2)
+    total = tail + head
+    with video.export_path(first, f"Datamosh {preset}") as (result, outs):
+        # Work next to the output: available disk and cleanup belong to this job.
+        with tempfile.TemporaryDirectory(prefix=".~mosh-", dir=result.parent) as folder:
+            d = Path(folder)
+            clean, warped, moshed = d / "clean.m4v", d / "warped.m4v", d / "moshed.m4v"
 
+            def normalize(index, count, label):
+                return (f"[{index}:v:0]{video.square_pixels_filter()},fps={fps},"
+                        f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
+                        f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p,"
+                        f"tpad=stop_mode=clone:stop_duration=0.1,trim=end_frame={count},setpts=N/({fps}*TB)[{label}]")
 
-def sequence(paths, *, duration=2., strength=65, max_side=720, audio=True, fps=30,
-             curve=None, excerpts=False, tail=4., head=6.):
-    """Melt ordered clips once each; excerpt mode retains the A-tail/B-head tool."""
-    paths = [video.local_file(p) for p in paths]
-    if not 2 <= len(paths) <= 16 or excerpts and len(paths) != 2:
-        raise UserError('Choose 2–16 clips. Excerpts are available for exactly two clips.')
-    if (not all(math.isfinite(v) for v in (duration,strength,max_side,fps,tail,head))
-            or not .1 <= duration <= 60 or not 0 <= strength <= 100 or not 64 <= max_side <= 2160
-            or fps not in (24,25,30,60)):
-        raise UserError('Choose valid duration, strength, resolution and frame rate.')
-    curve = validate_curve(curve)
-    infos = [video.probe(p) for p in paths]
-    lengths = [i.duration for i in infos]
-    starts = [0.] * len(paths)
-    if excerpts:
-        if not .2 <= tail <= lengths[0]+.05 or not .2 <= head <= lengths[1]+.05:
-            raise UserError('Choose clip ranges within the source duration.')
-        lengths = [min(tail,lengths[0]), min(head,lengths[1])]
-        starts[0] = max(0.,infos[0].duration-lengths[0])
-    counts = [max(1,round(length*fps)) for length in lengths]
-    bridge = max(1,round(duration*fps))
-    if any(count < bridge+3 for count in counts[1:]):
-        raise UserError('The transition must finish at least two clean frames before each following clip ends.')
-    lengths = [n/fps for n in counts]
-    total_frames, boundaries = sum(counts), []
-    for n in range(1,len(paths)):
-        boundaries.append(sum(counts[:n]))
-    total = total_frames/fps
-    a=infos[0]
-    scale=min(1.,max_side/max(a.display_width,a.display_height))
-    w,h=max(2,round(a.display_width*scale/2)*2),max(2,round(a.display_height*scale/2)*2)
-    with video.export_path(paths[0], 'Datamosh Melt') as (result,outs):
-        with tempfile.TemporaryDirectory(prefix='.~mosh-',dir=result.parent) as folder:
-            d=Path(folder)
-            clean,warped,moshed=d/'clean.m4v',d/'warped.m4v',d/'moshed.m4v'
-            inputs=[]
-            graph=[]
-            for i,(path,start,length,count) in enumerate(zip(paths,starts,lengths,counts)):
-                inputs += ['-ss',str(start),'-t',str(length),*video.input_options(path),'-i',str(path)]
-                graph.append(f'[{i}:v:0]{video.square_pixels_filter()},fps={fps},'
-                    f'scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,'
-                    f'setsar=1,format=yuv420p,tpad=stop_mode=clone:stop_duration=0.2,'
-                    f'trim=end_frame={count},setpts=N/({fps}*TB)[v{i}]')
-            graph.append(''.join(f'[v{i}]' for i in range(len(paths)))+f'concat=n={len(paths)}:v=1:a=0[v]')
-            keys=sorted({n/fps for n in boundaries}|{(n+bridge)/fps for n in boundaries})
-            args=video.ffmpeg_args('ffgac')+inputs+['-filter_complex_threads','2','-filter_complex',';'.join(graph),
-                '-map','[v]','-an','-c:v','mpeg4','-mpv_flags','+nopimb+forcemv','-q:v','3','-fcode','6',
-                '-g','max','-sc_threshold','max','-bf','0','-force_key_frames',','.join(f'{t:.8f}' for t in keys),
-                '-threads','4','-r',str(fps),'-f','rawvideo',str(clean)]
-            video.run_process(args,total,'1/4 · Preparing ordered clips…',0,.4)
-            params=json.dumps(dict(ranges=[dict(start=n,end=n+bridge) for n in boundaries],
-                strength=round(strength*1000),curve=[[round(x*100000),round(y*100000)] for x,y in curve],
-                total=total_frames),separators=(',',':'))
-            script=Path(__file__).with_name('assets')/'datamosh.js'
-            video.run_process([video.executable('ffedit'),'-i',str(clean),'-s',str(script),'-sp',params,'-o',str(warped)],
-                message='2/4 · Melting motion vectors…',offset=.4,span=.15,parse_progress=False)
-            removed=[]
-            count=0
-            with moshed.open('wb') as stream:
-                for kind,packet in _packets(warped):
-                    video.check_cancel()
-                    if kind is None:
-                        stream.write(packet)
-                        continue
-                    if kind==0 and any(n <= count < n+bridge for n in boundaries):
-                        removed.append(count)
-                    else:
-                        stream.write(packet)
-                    count+=1
-            if len(removed)<len(boundaries) or count<total_frames-1:
-                raise UserError('A transition keyframe or clean recovery frame is missing. Try a shorter transition.')
-            video.progress(.6,'4/4 · Exporting Melt series…')
-            # Fill the removed frame at its original position, preserving later cuts/audio.
-            gaps=''.join(f'+gte(N,{n-i})' for i,n in enumerate(removed))
-            graph=[f"[0:v]setpts='(N{gaps})/({fps}*TB)',fps={fps},"
-                   f'tpad=stop_mode=clone:stop_duration=0.2,trim=duration={total}[glitch]',
-                   f'[1:v]setpts=N/({fps}*TB),trim=duration={total}[clean]']
-            gain=curve_expression(curve,total)
-            # Blending with clean video makes zero on the curve truly clean.
-            gain=f'({gain})*{min(1.,strength/65):.8f}'
-            graph.append(f"[glitch][clean]blend=all_expr='A*({gain})+B*(1-({gain}))':shortest=1[v]")
-            has_audio=audio and any(i.has_audio for i in infos)
-            if has_audio:
-                for idx,(info,length) in enumerate(zip(infos,lengths)):
-                    source=f'[{idx+2}:a:0]' if info.has_audio else 'anullsrc=r=48000:cl=stereo,'
-                    graph.append(f'{source}atrim=duration={length},asetpts=PTS-STARTPTS,aresample=48000,'
-                        f'aformat=sample_fmts=fltp:channel_layouts=stereo,apad,atrim=duration={length}[a{idx}]')
-                graph.append(''.join(f'[a{i}]' for i in range(len(paths)))+f'concat=n={len(paths)}:v=0:a=1[audio]')
-            args=video.ffmpeg_args()+['-fflags','+genpts','-r',str(fps),'-i',str(moshed),
-                '-r',str(fps),'-i',str(clean)]+inputs+['-filter_complex_threads','2','-filter_complex',';'.join(graph),'-map','[v]']
-            args += ['-map','[audio]'] if has_audio else ['-an']
-            args += video._video_codec('MP4')+['-t',str(total),str(result)]
-            video.run_process(args,total,'4/4 · Exporting Melt series…',.6,.4)
+            graph = normalize(0, af, "a") + ";" + normalize(1, bf, "b") + ";[a][b]concat=n=2:v=1:a=0[v]"
+            args = video.ffmpeg_args("ffgac") + ["-ss", str(a_start), "-t", str(tail), *video.input_options(first), "-i", str(video.local_file(first)),
+                    "-t", str(head), *video.input_options(second), "-i", str(video.local_file(second)), "-filter_complex_threads", "2",
+                    "-filter_complex", graph, "-map", "[v]", "-an", "-c:v", "mpeg4",
+                    "-mpv_flags", "+nopimb+forcemv", "-q:v", "3", "-fcode", "6", "-g", "max",
+                    "-sc_threshold", "max", "-bf", "0", "-force_key_frames", f"{tail:.8f},{tail + duration:.8f}",
+                    "-threads", "4", "-r", str(fps), "-f", "rawvideo", str(clean)]
+            video.run_process(args, total, "1/4 · Preparing clips…", 0, .4)
+            params = json.dumps(dict(start=af, end=af + bridge, strength=strength, preset=preset), separators=(",", ":"))
+            script = Path(__file__).with_name("assets") / "datamosh.js"
+            video.run_process([ffedit, "-i", str(clean), "-s", str(script), "-sp", params, "-o", str(warped)],
+                              message="2/4 · Bending motion vectors…", offset=.4, span=.15, parse_progress=False)
+            video.progress(.55, "3/4 · Removing transition keyframes…")
+            removed, count = remove_keyframes(warped, moshed, af, af + bridge)
+            if removed < 1:
+                raise UserError("The transition keyframe was not found. Try a different transition duration.")
+            if count < af + bridge + 1:
+                raise UserError("The second clip ended before the transition could recover.")
+            video.progress(.6, "4/4 · Exporting playable MP4…")
+            args = video.ffmpeg_args() + ["-fflags", "+genpts", "-r", str(fps), "-i", str(moshed),
+                    "-ss", str(a_start), "-t", str(tail), *video.input_options(first), "-i", str(video.local_file(first)),
+                    "-t", str(head), *video.input_options(second), "-i", str(video.local_file(second))]
+            graph = (f"[0:v]setpts=N/({fps}*TB),tpad=stop_mode=clone:stop_duration={removed / fps},"
+                     f"trim=duration={total}[v]")
+            if audio and (a.has_audio or b.has_audio):
+                for idx, info, length, label in [(1, a, tail, "aa"), (2, b, head, "bb")]:
+                    source = f"[{idx}:a:0]" if info.has_audio else "anullsrc=r=48000:cl=stereo,"
+                    graph += (f";{source}atrim=duration={length},asetpts=PTS-STARTPTS,aresample=48000,"
+                              f"aformat=sample_fmts=fltp:channel_layouts=stereo,apad,atrim=duration={length}[{label}]")
+                graph += ";[aa][bb]concat=n=2:v=0:a=1[audio]"
+            args += ["-filter_complex_threads", "2", "-filter_complex", graph, "-map", "[v]"]
+            args += ["-map", "[audio]"] if audio and (a.has_audio or b.has_audio) else ["-an"]
+            args += video._video_codec("MP4") + ["-t", str(total), str(result)]
+            video.run_process(args, total, "4/4 · Exporting playable MP4…", .6, .4)
     return outs

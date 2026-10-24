@@ -8,6 +8,34 @@ from PIL import Image, ImageOps
 from .util import UserError, sibling
 
 ANIMATED_TARGETS = {'GIF', 'WEBP', 'PNG', 'TIFF', 'AVIF'}
+FRAME_TARGETS = {'PNG', 'JPG', 'WEBP', 'HEIC', 'TIFF', 'AVIF', 'BMP', 'ICO'}
+
+
+def extract_frames(src, target):
+    """Publish one sibling folder only after every composited frame is saved."""
+    import tempfile
+    from .convert import save_image
+    from . import video
+    from .util import unique_path
+
+    src = Path(src)
+    video.check_cancel()
+    with tempfile.TemporaryDirectory(prefix='.~frames-', dir=src.parent) as temporary:
+        stage = Path(temporary) / 'frames'
+        stage.mkdir()
+        with Image.open(src) as source:
+            count = source.n_frames
+            for index in range(count):
+                video.check_cancel()
+                source.seek(index)
+                frame = ImageOps.exif_transpose(source.convert('RGBA'))
+                save_image(frame, stage / f'frame-{index+1:06d}.{target.lower()}', target)
+                video.progress((index+1)/count, 'Extracting animation frames…')
+        with video._publish_lock:
+            video.check_cancel()
+            out = unique_path(src.with_name(src.stem + ' Frames'))
+            stage.rename(out)
+    return out
 
 
 def timing_rate(durations):

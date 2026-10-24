@@ -454,248 +454,251 @@ class DatamoshWindow(_AsyncTools):
     tool_name = 'Datamosh'
 
     def __init__(self, paths, notify):
-        from .media_controls import EffectEnvelope, DropZone, FileSequence
+        from .media_controls import DropZone
         from .util import category
-        super().__init__('Datamosh · Melt', paths, notify, (800, 860))
-        selected_paths=list(paths)
-        audio_mode=category(paths[0])=='audio'
-        self.media_mode=QComboBox()
-        self.media_mode.addItem(tr('Video · Melt'),'video')
-        self.media_mode.addItem(tr('Audio · Glitch'),'audio')
+        selected = list(paths)
+        audio_mode = category(paths[0]) == 'audio'
+        super().__init__('Datamosh · Melt', paths[:2], notify, (800, 740))
+        self.media_mode = QComboBox()
+        self.media_mode.addItem(tr('Video · Melt'), 'video')
+        self.media_mode.addItem(tr('Audio · Glitch'), 'audio')
         self.media_mode.setAccessibleName(tr('Datamosh media'))
         self.body.addWidget(self.media_mode)
-        outer_body=self.body
-        self.video_panel=QWidget()
-        self.body=QVBoxLayout(self.video_panel)
-        self.body.setContentsMargins(0,0,0,0)
-        outer_body.addWidget(self.video_panel,1)
-        paths=[] if audio_mode else paths
-        self.infos = []
+        outer_body = self.body
+        self.video_panel = QWidget()
+        video_layout = QVBoxLayout(self.video_panel)
+        video_layout.setContentsMargins(0, 0, 0, 0)
+        self.timeline_toggle = QCheckBox(tr('Edit a video sequence on the timeline'))
+        video_layout.addWidget(self.timeline_toggle)
+        self.classic_panel = QWidget()
+        self.body = QVBoxLayout(self.classic_panel)
+        self.body.setContentsMargins(0, 0, 0, 0)
+        video_layout.addWidget(self.classic_panel, 1)
+        outer_body.addWidget(self.video_panel, 1)
         self.first_info = self.second_info = None
         self.second_path = None
-        self._load_generation = 0
+        self._first_serial = self._second_serial = 0
         self.accept_media = lambda p: category(p) == 'video' or p.suffix.lower() == '.gif'
-        intro = QLabel(tr('Classic Melt carries one clip into the next. Drop clips below and drag rows to set their order.'))
+        intro = QLabel(tr("Carry the last image of A into B's motion, then return to a clean B."))
         intro.setWordWrap(True)
         self.body.addWidget(intro)
-        audio_button = QPushButton(tr('Audio file transitions…'))
-        audio_button.clicked.connect(self.open_audio_transition)
-        self.sequence = FileSequence(paths, self.accept_media, video.VIDEO_FILTER)
-        self.sequence.list.setMaximumHeight(100)
-        self.body.addWidget(self.sequence)
-        row = QHBoxLayout()
-        self.previews = []
-        self.names = []
-        for index, title in enumerate(('First clip · drop to replace', 'Next clip · drop to replace')):
-            zone = DropZone(title, self.accept_media)
-            zone.setMaximumHeight(90)
-            zone.filesDropped.connect(lambda files, i=index: self.replace_clip(i, files))
-            row.addWidget(zone, 1)
-            self.previews.append(zone)
-        self.body.addLayout(row)
+        previews = QHBoxLayout()
+        self.previews, self.names = [], []
+        for index, title in enumerate(('A · END OF FIRST VIDEO', 'B · START OF SECOND VIDEO')):
+            column = QVBoxLayout()
+            column.addWidget(section(title))
+            name = QLabel(tr('Choose first video…' if index == 0 else 'Choose a second video…'))
+            name.setWordWrap(True)
+            name.setObjectName('dim')
+            column.addWidget(name)
+            frame = DropZone('Drop video A here' if index == 0 else 'Drop video B here', self.accept_media)
+            frame.setMaximumHeight(180)
+            frame.filesDropped.connect(lambda files, i=index: self.replace_clip(i, files))
+            column.addWidget(frame)
+            previews.addLayout(column, 1)
+            self.previews.append(frame)
+            self.names.append(name)
+        self.body.addLayout(previews)
+        choose = QPushButton(tr('Choose second video…'))
+        choose.clicked.connect(self.choose_second)
+        self.body.addWidget(choose)
         self.form = QFormLayout()
         self.form.setVerticalSpacing(8)
-        self.strength = slider(0,100,65)
-        self.strength.setAccessibleName(tr('Datamosh intensity'))
-        row = QHBoxLayout()
-        row.addWidget(self.strength,1)
-        row.addWidget(value_editor(self.strength,'Datamosh intensity',lambda v:f'{v}%'))
-        self.form.addRow(tr('Intensity'),row)
-        self.curve = EffectEnvelope()
-        self.form.addRow(self.curve)
-        self.excerpts = QCheckBox(tr('Use only the end of A and beginning of B (two clips)'))
-        self.excerpts.setChecked(len(paths) <= 2)
-        self.form.addRow(tr(self.excerpts))
         self.tail, self.head, self.duration = _seconds(4), _seconds(6), _seconds(2)
         self.tail.setMinimum(.2)
         self.head.setMinimum(.2)
         self.duration.setMinimum(.1)
-        _field(self.form, 'Last seconds of A', self.tail)
-        _field(self.form, 'First seconds of B', self.head)
-        _field(self.form, 'Transition duration at each cut', self.duration)
         self.preset = QComboBox()
-        self.preset.addItem(tr('Melt'))
+        self.preset.addItem('Melt', 'Melt')
         self.preset.setEnabled(False)
+        self.strength = slider(1, 100, 65)
+        self.strength.setAccessibleName(tr('Datamosh intensity'))
+        strength_row = QHBoxLayout()
+        strength_row.addWidget(self.strength, 1)
+        strength_row.addWidget(value_editor(self.strength, 'Datamosh intensity'))
         self.resolution = QComboBox()
-        for px in (360,720,1080,1440,2160):
-            self.resolution.addItem(tr(f'{px} px · longest edge'),px)
+        for px in (360, 720, 1080, 1440, 2160):
+            self.resolution.addItem(tr(f'{px} px · longest edge'), px)
         self.resolution.setCurrentIndex(1)
         self.fps = QComboBox()
-        for rate in (24,25,30,60):
-            self.fps.addItem(tr(f'{rate} fps'),rate)
+        for rate in (24, 25, 30, 60):
+            self.fps.addItem(tr(f'{rate} fps'), rate)
         self.fps.setCurrentIndex(2)
-        _field(self.form,'Resolution',self.resolution)
-        _field(self.form,'Frame rate',self.fps)
-        self.audio = QCheckBox(tr('Keep audio from selected clips'))
+        _field(self.form, '&Last seconds of A', self.tail)
+        _field(self.form, '&First seconds of B', self.head)
+        _field(self.form, '&Transition duration', self.duration)
+        _field(self.form, '&Preset', self.preset)
+        self.form.addRow(tr('Intensity'), strength_row)
+        _field(self.form, '&Resolution', self.resolution)
+        _field(self.form, 'Frame rate', self.fps)
+        self.audio = QCheckBox(tr('Keep audio from both selected segments'))
         self.audio.setChecked(True)
-        self.form.addRow(tr(self.audio))
-        note = QLabel(tr('Intensity sets the effect strength. Choose a simple shape below to vary it over time. '
-                      'Melt acts at clip changes, then returns to a clean image. '
-                      'Preview uses the same timeline and curve at 480 px; open it from the result notification.'))
-        note.setWordWrap(True)
-        note.setObjectName('dim')
-        self.body.addWidget(_scroll_panel(self.form,note),1)
+        self.form.addRow(self.audio)
+        self.note = QLabel(tr('FFglitch motion vectors + keyframe removal · Export: MP4\n'
+            'Motion-rich footage gives stronger results. B returns cleanly after the transition.\n'
+            'Preview renders a short 480 px excerpt; open it from the result notification.'))
+        self.note.setObjectName('dim')
+        self.note.setWordWrap(True)
+        self.body.addWidget(_scroll_panel(self.form, self.note), 1)
         self.body.addWidget(self.error)
         self.preview_btn = QPushButton(tr('Render preview'))
-        self.preview_btn.clicked.connect(lambda:self.save(preview=True))
-        self.body.addLayout(self.footer('Create Melt video',self.save,extra_buttons=(audio_button,self.preview_btn)))
-        self.sequence.changed.connect(self.reload_sequence)
-        self.excerpts.toggled.connect(self._mode_changed)
-        self.tail.valueChanged.connect(self._timeline)
-        self.head.valueChanged.connect(self._timeline)
-        self.reload_sequence(self.sequence.paths())
+        self.preview_btn.clicked.connect(lambda: self.save(preview=True))
+        self.body.addLayout(self.footer('Create transition', self.save, extra_buttons=(self.preview_btn,)))
+        self._enable()
+        self._initial_video_paths = [] if audio_mode else [Path(p) for p in paths]
+        if not audio_mode and len(paths) <= 2:
+            self.load_first(Path(paths[0]))
+            if len(paths) > 1:
+                self.load_second(Path(paths[1]))
+        from .melt_timeline_tools import MeltTimelinePanel
+        self.timeline_panel = MeltTimelinePanel(self, self._initial_video_paths)
+        video_layout.addWidget(self.timeline_panel, 1)
+        self.timeline_toggle.toggled.connect(self._timeline_mode_changed)
+        self.timeline_toggle.setChecked(len(paths)>2 and not audio_mode)
+        self._timeline_mode_changed()
         from .audio_glitch_tools import AudioGlitchPanel
-        self.audio_panel=AudioGlitchPanel(self,selected_paths)
-        outer_body.addWidget(self.audio_panel,1)
-        self.body=outer_body
+        self.audio_panel = AudioGlitchPanel(self, selected if audio_mode else [])
+        outer_body.addWidget(self.audio_panel, 1)
+        self.body = outer_body
         self.media_mode.currentIndexChanged.connect(self._media_mode_changed)
         self.media_mode.setCurrentIndex(1 if audio_mode else 0)
         self._media_mode_changed()
-        self.resize(800,790)
 
-    def _media_mode_changed(self,*_):
-        audio_mode=self.media_mode.currentData()=='audio'
+    def _media_mode_changed(self, *_):
+        audio_mode = self.media_mode.currentData() == 'audio'
         self.video_panel.setVisible(not audio_mode)
         self.audio_panel.setVisible(audio_mode)
+        if audio_mode and not self.audio_panel.paths and self.first_info is not None:
+            self.audio_panel.load([self.path])
         self.title_label.setText(tr('Datamosh · Audio glitch' if audio_mode else 'Datamosh · Melt'))
 
+    def _timeline_mode_changed(self, *_):
+        enabled = self.timeline_toggle.isChecked()
+        self.classic_panel.setVisible(not enabled)
+        self.timeline_panel.setVisible(enabled)
+        if enabled:
+            self.timeline_panel.activate()
+        elif self._first_serial == 0 and self._initial_video_paths:
+            self.load_first(self._initial_video_paths[0])
+            if len(self._initial_video_paths)>1:
+                self.load_second(self._initial_video_paths[1])
+
     def _enter(self):
-        if hasattr(self,'audio_panel') and self.media_mode.currentData()=='audio':
-            video_button=self.primary_btn
-            self.primary_btn=self.audio_panel.save_btn
+        if self.media_mode.currentData() == 'audio' or self.timeline_toggle.isChecked():
+            video_button = self.primary_btn
+            self.primary_btn = self.audio_panel.save_btn if self.media_mode.currentData()=='audio' else self.timeline_panel.save_btn
             try:
                 super()._enter()
             finally:
-                self.primary_btn=video_button
+                self.primary_btn = video_button
         else:
             super()._enter()
 
     def accepts_sources(self, paths):
         from .util import category
-        return bool(paths) and (all(category(p)=='audio' for p in paths) or all(self.accept_media(p) for p in paths))
-
-    def open_audio_transition(self):
-        from . import audio
-        from .audio_tools import AudioTransitionWindow
-        paths,_ = QFileDialog.getOpenFileNames(self,tr('Choose sounds for a transition'),str(self.path.parent),tr(audio.AUDIO_FILTER))
-        if not paths:
-            return
-        window = AudioTransitionWindow(paths,self.notify)
-        window.submit = self.submit
-        self._audio_window = window
-        if self.replacement_handler:
-            self.replacement_handler(window)
-        else:
-            window.present()
+        return bool(paths) and len(paths) <= 16 and (all(category(p) == 'audio' for p in paths)
+                                                   or all(self.accept_media(p) for p in paths))
 
     def receive_files(self, paths):
         from .util import category
-        if category(paths[0])=='audio' or self.media_mode.currentData()=='audio':
+        if category(paths[0]) == 'audio' or self.media_mode.currentData() == 'audio':
             self.audio_panel.load(paths)
             self.media_mode.setCurrentIndex(1)
+        elif self.timeline_toggle.isChecked() or len(paths)>2:
+            self.timeline_toggle.setChecked(True)
+            self.timeline_panel.add(paths)
+        elif len(paths) == 2:
+            self.load_first(paths[0])
+            self.load_second(paths[1])
         else:
-            self.sequence.add(paths)
+            self.load_second(paths[0]) if self.first_info is not None else self.load_first(paths[0])
 
     def replace_clip(self, index, files):
-        from PySide6.QtWidgets import QListWidgetItem
-        if index < self.sequence.list.count():
-            item = self.sequence.list.item(index)
-            item.setText(tr(files[0].name))
-            item.setToolTip(tr(str(files[0])))
-            item.setData(Qt.UserRole,str(files[0]))
-            if len(files)>1:
-                self.sequence.add(files[1:])
-            else:
-                self.reload_sequence(self.sequence.paths())
-        else:
-            self.sequence.add(files)
+        (self.load_first if index == 0 else self.load_second)(files[0])
+        if len(files) > 1 and index == 0:
+            self.load_second(files[1])
 
-    def reload_sequence(self, paths):
-        self._load_generation += 1
-        generation = self._load_generation
-        self.paths = list(paths)
-        self.infos = []
-        self.first_info = self.second_info = None
-        self.primary_btn.setEnabled(False)
-        self.preview_btn.setEnabled(False)
-        self.error.clear()
-        self.excerpts.setEnabled(len(paths)==2)
-        if len(paths)!=2:
-            self.excerpts.setChecked(False)
-        if not paths:
-            self.error.setText(tr('Drop at least two clips here.'))
-            return
-        self.path = paths[0]
-        self.subtitle.setText(tr(f'{len(paths)} clips · ' + ' → '.join(p.name for p in paths)))
-        if len(paths)>16:
-            self.error.setText(tr('Use up to 16 clips in one series.'))
-            return
-        def load():
-            infos = [video.probe(p) for p in paths]
-            frames = [video.preview_bytes(paths[0],max(0,infos[0].duration-.15))]
-            if len(paths)>1:
-                frames.append(video.preview_bytes(paths[1]))
-            return infos,frames
-        def done(data):
-            if generation!=self._load_generation:
+    def load_first(self, path):
+        self._first_serial += 1
+        serial = self._first_serial
+        self.path = Path(path)
+        self.first_info = None
+        self.names[0].setText(self.path.name)
+        self._enable()
+        def loaded(data):
+            if serial != self._first_serial:
                 return
-            self.infos,frames = data
-            self.first_info = self.infos[0]
-            self.second_info = self.infos[1] if len(self.infos)>1 else None
-            self.second_path = paths[1] if len(paths)>1 else None
-            for zone,frame,path in zip(self.previews,frames,paths):
-                _show_frame(zone,frame)
-                zone.setToolTip(tr(str(path)+' · Drop to replace'))
-            self.tail.setMaximum(self.infos[0].duration)
-            self.tail.setValue(min(4,self.infos[0].duration))
-            if self.second_info:
-                self.head.setMaximum(self.second_info.duration)
-                self.head.setValue(min(6,self.second_info.duration))
-                self.duration.setValue(min(2,max(.1,min(i.duration for i in self.infos[1:])/2)))
-            self._mode_changed()
-            self.primary_btn.setEnabled(len(paths)>=2)
-            self.preview_btn.setEnabled(len(paths)>=2)
-        self.lookup(load,done,lambda msg:self.error.setText(tr(msg)) if generation==self._load_generation else None)
+            self.first_info, frame = data
+            self.tail.setMaximum(self.first_info.duration)
+            self.tail.setValue(min(4, self.first_info.duration))
+            self.names[0].setText(f'{path.name} · {video.time_text(self.first_info.duration)}')
+            _show_frame(self.previews[0], frame)
+            self._enable()
+        def read():
+            info = video.probe(path)
+            return info, video.preview_bytes(path, max(0, info.duration - .15))
+        self.lookup(read, loaded)
 
-    def _mode_changed(self,*_):
-        self.tail.setEnabled(self.excerpts.isChecked())
-        self.head.setEnabled(self.excerpts.isChecked())
-        self._timeline()
+    def choose_second(self):
+        path, _ = QFileDialog.getOpenFileName(self, tr('Choose video B'), str(self.path.parent), tr(video.VIDEO_FILTER))
+        if path:
+            self.load_second(Path(path))
 
-    def _timeline(self,*_):
-        if len(self.infos)<2:
-            return
-        lengths = [self.tail.value(),self.head.value()] if self.excerpts.isChecked() else [i.duration for i in self.infos]
-        total=sum(lengths)
-        self.curve.curve.markers=[sum(lengths[:i])/total for i in range(1,len(lengths))]
-        self.curve.set_duration(total)
-        self.curve.curve.update()
+    def load_second(self, path):
+        path = Path(path)
+        self._second_serial += 1
+        serial = self._second_serial
+        self.second_path = path
+        self.second_info = None
+        self.error.clear()
+        self.names[1].setText(path.name)
+        self.previews[1].setText(tr('Reading video…'))
+        self._enable()
+        def loaded(data):
+            if serial != self._second_serial:
+                return
+            self.second_info, frame = data
+            self.names[1].setText(f'{path.name} · {video.time_text(self.second_info.duration)}')
+            self.head.setMaximum(self.second_info.duration)
+            self.head.setValue(min(6, self.second_info.duration))
+            self.duration.setValue(min(2, max(.1, self.second_info.duration / 2)))
+            _show_frame(self.previews[1], frame)
+            self._enable()
+        self.lookup(lambda: (video.probe(path), video.preview_bytes(path)), loaded)
+
+    def _enable(self):
+        enabled = self.first_info is not None and self.second_info is not None
+        self.primary_btn.setEnabled(enabled)
+        self.preview_btn.setEnabled(enabled)
 
     def validate(self):
         self.error.clear()
-        if len(self.infos)<2:
+        if not self.first_info or not self.second_info:
             return False
-        limit = self.head.value() if self.excerpts.isChecked() else min(i.duration for i in self.infos[1:])
-        if self.duration.value()>limit-3/self.fps.currentData():
-            self.error.setText(tr('Leave at least two clean frames after each transition. Shorten the transition or choose longer clips.'))
+        if self.duration.value() > self.head.value() - .1:
+            self.error.setText(tr('The transition must end at least 0.1 seconds before the selected B segment ends.'))
+            self.duration.setFocus()
             return False
         return True
 
-    def save(self,checked=False,*,preview=False):
+    def save(self, checked=False, *, preview=False):
         if not self.validate():
             return
-        paths=list(self.paths)
-        opts=dict(duration=self.duration.value(),strength=self.strength.value(),curve=self.curve.points(),
-                  excerpts=self.excerpts.isChecked(),tail=self.tail.value(),head=self.head.value(),
-                  max_side=480 if preview else self.resolution.currentData(),audio=self.audio.isChecked(),fps=self.fps.currentData())
-        fn=lambda:datamosh.sequence(paths,**opts)
+        opts = dict(tail=self.tail.value(), head=self.head.value(), duration=self.duration.value(),
+                    strength=self.strength.value(), preset='Melt', max_side=self.resolution.currentData(),
+                    audio=self.audio.isChecked(), fps=self.fps.currentData())
+        if preview:
+            opts.update(tail=min(opts['tail'], 1.5), duration=min(opts['duration'], 3), max_side=480)
+            opts['head'] = min(opts['head'], opts['duration'] + .75)
+        a, b = self.path, self.second_path
+        fn = lambda: datamosh.transition(a, b, **opts)
         if self.submit:
-            self.submit('tool:Datamosh',[str(p) for p in paths],fn,'Creating Melt series…','Preview · Melt' if preview else 'Melt')
+            self.submit('tool:Datamosh', [str(a), str(b)], fn, 'Creating Datamosh transition…',
+                        'Preview · Melt' if preview else 'Melt')
             if not preview:
                 self.close()
         else:
-            self.notify('tool:Datamosh',[str(p) for p in paths],fn(),'Melt')
-
+            self.notify('tool:Datamosh', [str(a), str(b)], fn(), 'Melt')
 
 class _RenderSignals(QObject):
     done = Signal(object)

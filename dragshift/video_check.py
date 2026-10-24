@@ -31,8 +31,15 @@ def selftest():
                 out = datamosh.transition(a, b, tail=.5, head=1.5, duration=.5, max_side=160, preset=preset)[0]
                 info = video.probe(out)
                 assert abs(info.duration - 2) < .15 and info.has_audio
-            series=datamosh.sequence([a,b,a],duration=.5,max_side=160,curve=[(0,0),(.3,0),(.6,1),(1,1)])[0]
-            assert abs(video.probe(series).duration-6)<.15
+            from .melt_timeline import Timeline, render
+            timeline = Timeline()
+            for source in (a,b,a):
+                timeline.add(source,2.,0.,1.)
+            timeline.cut(0).duration, timeline.cut(0).strength = .3,30
+            timeline.cut(1).duration, timeline.cut(1).strength = .5,85
+            result = render(timeline,max_side=160)[0]
+            info = video.probe(result)
+            assert abs(info.duration-3.) < .15 and info.has_audio
             from .video_tools import DatamoshWindow
             from .video_geometry import VideoResizeWindow
             windows = [DatamoshWindow([str(a), str(b)], lambda *_: None), VideoResizeWindow([str(a)], lambda *_: None)]
@@ -46,7 +53,7 @@ def selftest():
             for w in windows:
                 w.close()
             QApplication.processEvents()
-        print("VIDEO SELFTEST OK · 8 exports, editing, frame, classic Melt, series, strength curve, Qt editors", flush=True)
+        print("VIDEO SELFTEST OK · 8 exports, editing, frame, classic A/B Melt without clean blending, Qt editors", flush=True)
         return 0
     except Exception:
         import traceback

@@ -126,7 +126,12 @@ def image_to(src: str | Path, target: str) -> list[Path]:
     if target in ('MP4', 'WEBM', 'MOV', 'MKV', 'AVI'):
         from .video import convert_video
         return convert_video(src, target)
-    from .animation import transform_image
+    from .animation import FRAME_TARGETS, extract_frames, transform_image
+    if target in FRAME_TARGETS:
+        with Image.open(src) as source:
+            frames = source.format == 'GIF' and getattr(source, 'is_animated', False)
+        if frames:
+            return [extract_frames(src, target)]
     return [transform_image(src, '', target=target)]
 
 

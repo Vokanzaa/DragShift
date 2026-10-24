@@ -62,6 +62,8 @@ def _dim_str(d) -> str:
 def summarize(action: str, srcs: list, outs: list, extra: str = "") -> Result:
     srcs = [Path(s) for s in srcs]
     outs = [Path(o) for o in outs if o]
+    if action == 'tool:Print interlace':
+        return Result('Print job submitted', extra or 'The raster was sent to the selected printer.', outs, srcs)
     if not outs:
         return Result(action, extra or "Nothing was written", [], srcs)
     src = srcs[0] if srcs else outs[0]
@@ -70,6 +72,9 @@ def summarize(action: str, srcs: list, outs: list, extra: str = "") -> Result:
     kind, _, name = action.partition(":")
     o0 = outs[0]
     good = ""
+
+    if action == 'tool:Interlace':
+        return Result('Interlace ready', f'{o0.name} · {_dim_str(dims(o0))} · {human_size(after)}', outs, srcs)
 
     if action == "tool:Pack":
         return Result("Archive created", f"{o0.name} · {human_size(after)}", outs, srcs)
@@ -137,6 +142,10 @@ def summarize(action: str, srcs: list, outs: list, extra: str = "") -> Result:
 
     if kind == "convert":
         fmt = name
+        if o0.is_dir() and src.suffix.lower() == '.gif':
+            count = sum(1 for out in outs for p in out.iterdir() if p.is_file())
+            return Result('Animation frames extracted',
+                          f'{count} frames · {fmt} · {o0.name}/', outs, srcs)
         if len(srcs) > 1 and len(outs) == 1:
             title = f"{len(srcs)} files → 1 {fmt}"
         elif len(outs) > 1 and len(srcs) == 1:
