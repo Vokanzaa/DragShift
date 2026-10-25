@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import shlex
 import shutil
 import subprocess
@@ -73,6 +74,36 @@ def windows_sevenzip():
     raise RuntimeError('Install 7-Zip with both 7z.exe and 7z.dll before staging')
 
 
+def checksum_for_asset(text, name):
+    for line in text.splitlines():
+        parts = line.split(maxsplit=1)
+        if len(parts) == 2 and parts[1].lstrip('*') == name:
+            if re.fullmatch(r'[a-fA-F0-9]{64}', parts[0]):
+                return parts[0].lower()
+    raise RuntimeError(f'Missing published checksum for {name}')
+
+
+def stage_linux_ffmpeg(dest, cache, records):
+    # Debian 12's FFmpeg 5 can shorten the last retimed frame. Ship the current
+    # stable full static build, independently of the host distribution's codec set.
+    name = 'ffmpeg-n9.0-latest-linux64-gpl-9.0.tar.xz'
+    base = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/'
+    sums = download(base + 'checksums.sha256', cache / 'ffmpeg-linux.sha256', records)
+    expected = checksum_for_asset(sums.read_text(encoding='utf-8'), name)
+    package = download(base + name, cache / name, records, expected)
+    folder = cache / 'ffmpeg-linux'
+    with tarfile.open(package) as archive:
+        archive.extractall(folder, filter='data')
+    for binary in ('ffmpeg', 'ffprobe'):
+        find_copy(folder, binary, dest)
+    notices = [p for p in folder.rglob('*') if p.is_file()
+               and (p.name.startswith(('LICENSE', 'COPYING')) or p.name == 'README.txt')]
+    if not notices:
+        raise RuntimeError('FFmpeg archive has no license notices')
+    for notice in notices:
+        shutil.copy2(notice, dest / ('FFmpeg-' + notice.name))
+
+
 def imagemagick_env():
     packages = ('lqr-1', 'libpng', 'glib-2.0')
     run(['pkg-config', '--print-errors', '--exists', 'lqr-1 >= 0.1.0', *packages[1:]])
@@ -124,11 +155,14 @@ def stage():
             if files:
                 shutil.copy2(files[0], dest / ('ImageMagick-' + name + '.txt'))
     else:
-        for name in ('ffmpeg', 'ffprobe'):
-            source = shutil.which(name)
-            if not source:
-                raise RuntimeError(f'Install native {name} before staging')
-            shutil.copy2(source, dest / name)
+        if system == 'Linux':
+            stage_linux_ffmpeg(dest, cache, records)
+        else:
+            for name in ('ffmpeg', 'ffprobe'):
+                source = shutil.which(name)
+                if not source:
+                    raise RuntimeError(f'Install native {name} before staging')
+                shutil.copy2(source, dest / name)
         z = shutil.which('7zz') or shutil.which('7z')
         if not z:
             raise RuntimeError('Install native 7-Zip before staging')
@@ -206,6 +240,7 @@ def check():
     # without libvorbis). Fail during staging, before editor tests or packaging.
     for name in ('ffmpeg', 'ffgac'):
         versions[name + '_required_features'] = check_media_capabilities(name)
+    video.require_precise_timing()
     video.capture([archives.executable(), 'i'])
     print(json.dumps(versions, indent=2))
 
