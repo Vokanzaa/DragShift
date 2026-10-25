@@ -40,6 +40,8 @@ Numeric slider values are editable with the keyboard; Enter confirms the value w
 
 DOCX → PDF uses Microsoft Word when available, otherwise a basic local renderer. PDF → DOCX rebuilds paragraphs and images. Complex layouts, fonts, tables, headers, charts and scanned pages may not reproduce accurately; scanned text is not recognized with OCR.
 
+Video editing requires FFmpeg 7 or newer. Packaged builds include a compatible full engine; Linux uses a static build verified against its provider's checksum instead of the older Debian system engine.
+
 ## Video and Datamosh
 
 MP4/MKV/MOV use H.264 and AAC, WebM uses VP9 and Opus, and AVI uses MPEG-4 video. GIF exports from video use 12 fps and an edge up to 640 px. Video edits save a new MP4. Speed ranges from 0.25× to 4× and preserves audio pitch. Editing retains every source frame and variable frame intervals; speed scales those intervals. Edited MP4s disable B-frame reordering to preserve final-frame timing, which can increase file size at the same quality. The frame preview updates with rotation, centre crop, mirror and colour settings using the same filters as export. Trim has two range handles synchronized with its start/end numeric fields; the frame slider also allows scrubbing.

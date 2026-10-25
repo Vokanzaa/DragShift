@@ -30,6 +30,17 @@ in this configuration; they remain independent executables.
 - Build provider, build configuration and external library source links: https://www.gyan.dev/ffmpeg/builds/
 - GPLv3 license: https://www.gnu.org/licenses/gpl-3.0.html
 
+Linux CI stages the full static GPL build of the FFmpeg 9.0 release branch from
+https://github.com/BtbN/FFmpeg-Builds/releases/tag/latest, with FFprobe from the
+same archive. The archive is verified against the provider's published
+`checksums.sha256`; its URL and SHA-256 are recorded in `EngineVersions.json`.
+The provider targets glibc 2.28 / Linux 4.18 and newer. Its build scripts,
+dependency sources and configuration are available at
+https://github.com/BtbN/FFmpeg-Builds; original archive license notices are staged
+beside the engines. macOS stages the selected full Homebrew build. Precise video
+editing requires FFmpeg 7 or newer; the older Debian 12 system FFmpeg is not used
+for the packaged media engine.
+
 This is a private local custom build, not an upstream DragShift release.
 Before redistributing the bundled engines, provide the complete corresponding
 source and notices required by their licenses, including configured external libraries.
