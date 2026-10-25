@@ -106,8 +106,12 @@ jobs:
         include:
           - runner: macos-15
             arch: apple-silicon
+            ffmpeg_formula: ffmpeg-full
           - runner: macos-15-intel
             arch: intel
+            # Full codec set plus an official Intel bottle; current ffmpeg-full
+            # only has ARM macOS bottles. Plain ffmpeg omits libvorbis.
+            ffmpeg_formula: ffmpeg@7
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -123,8 +127,13 @@ jobs:
           pip install -r requirements.txt pyinstaller pytest
 
       - name: Stage native media engines (including Liquid Rescale)
+        env:
+          FFMPEG_FORMULA: ${{ matrix.ffmpeg_formula }}
         run: |
-          brew install ffmpeg sevenzip pkgconf liblqr libpng
+          brew install "$FFMPEG_FORMULA" sevenzip pkgconf liblqr libpng
+          # Both formulae are keg-only; select their binaries without relinking
+          # or accidentally staging a preinstalled, reduced-codec ffmpeg.
+          export PATH="$(brew --prefix "$FFMPEG_FORMULA")/bin:$PATH"
           export PKG_CONFIG_PATH="$(brew --prefix liblqr)/lib/pkgconfig:$(brew --prefix libpng)/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
           python packaging/media_engines.py --stage
 
@@ -240,7 +249,7 @@ jobs:
 
       - name: Build the .deb
         run: |
-          PATH=/opt/venv/bin:$PATH packaging/linux/build-deb.sh 1.1.0+files.7
+          PATH=/opt/venv/bin:$PATH packaging/linux/build-deb.sh 1.1.0+files.8
           dpkg-deb --info dist/DragShift-linux-amd64.deb
           desktop-file-validate packaging/linux/dragshift.desktop
 
