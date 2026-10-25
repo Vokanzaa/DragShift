@@ -41,6 +41,13 @@ beside the engines. macOS stages the selected full Homebrew build. Precise video
 editing requires FFmpeg 7 or newer; the older Debian 12 system FFmpeg is not used
 for the packaged media engine.
 
+The Intel macOS package also stages Homebrew's SDL3 library beside the media
+executables, using the `libSDL3.dylib` name expected by SDL2-compat's dynamic
+loader. SDL3 uses the Zlib license; its notice is included as `SDL3-LICENSE.txt`.
+This runtime dependency is not present in SDL2-compat's Mach-O import table.
+Sources: https://github.com/libsdl-org/SDL and
+https://github.com/libsdl-org/sdl2-compat.
+
 This is a private local custom build, not an upstream DragShift release.
 Before redistributing the bundled engines, provide the complete corresponding
 source and notices required by their licenses, including configured external libraries.
