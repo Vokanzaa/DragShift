@@ -31,7 +31,7 @@ jobs:
         run: python packaging/media_engines.py --stage
 
       - name: Test all media engines and editors
-        run: python -m pytest -q
+        run: python -m pytest -v -s --maxfail=1
         env:
           QT_QPA_PLATFORM: offscreen
 
@@ -129,7 +129,7 @@ jobs:
           python packaging/media_engines.py --stage
 
       - name: Run tests
-        run: python -m pytest -q
+        run: python -m pytest -v -s --maxfail=1
         env:
           QT_QPA_PLATFORM: offscreen
 
@@ -233,7 +233,7 @@ jobs:
       - name: Run tests
         env:
           QT_QPA_PLATFORM: offscreen
-        run: /opt/venv/bin/python -m pytest -q
+        run: /opt/venv/bin/python -m pytest -v -s --maxfail=1
 
       - name: Build the app folder
         run: /opt/venv/bin/pyinstaller DragShift.spec --noconfirm
