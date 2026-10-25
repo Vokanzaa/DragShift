@@ -7,12 +7,19 @@ on:
     paths-ignore: ["**.md", "docs/**"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      mac_intel_only:
+        description: Check Intel Mac only (reuse other platform results)
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
 
 jobs:
   windows:
+    if: ${{ !inputs.mac_intel_only }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -106,15 +113,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - runner: macos-15
-            arch: apple-silicon
-            ffmpeg_formula: ffmpeg-full
-          - runner: macos-15-intel
-            arch: intel
-            # Full codec set plus an official Intel bottle; current ffmpeg-full
-            # only has ARM macOS bottles. Plain ffmpeg omits libvorbis.
-            ffmpeg_formula: ffmpeg@7
+        # The optional isolated retry does not rebuild successful Windows/Linux/ARM packages.
+        # Intel needs the full codec set and an official Intel bottle; plain ffmpeg omits Vorbis.
+        include: ${{ fromJSON(inputs.mac_intel_only && '[{"runner":"macos-15-intel","arch":"intel","ffmpeg_formula":"ffmpeg@7"}]' || '[{"runner":"macos-15","arch":"apple-silicon","ffmpeg_formula":"ffmpeg-full"},{"runner":"macos-15-intel","arch":"intel","ffmpeg_formula":"ffmpeg@7"}]') }}
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -167,7 +168,9 @@ jobs:
                   try:
                       sample = subprocess.run(['sample', str(proc.pid), '2', '1'],
                                               capture_output=True, text=True, timeout=10)
-                      print(sample.stdout[-22000:] + sample.stderr[-2000:], flush=True)
+                      # Keep the call graph, not the huge Binary Images appendix.
+                      print(sample.stdout.split('Binary Images:', 1)[0][:26000]
+                            + sample.stderr[-2000:], flush=True)
                   finally:
                       proc.kill()
                       out, err = proc.communicate()
@@ -254,6 +257,7 @@ jobs:
           path: dist/DragShift-mac-${{ matrix.arch }}.dmg
 
   linux:
+    if: ${{ !inputs.mac_intel_only }}
     # Built on Debian 12 (glibc 2.36): the .deb runs on Debian 12/13, Ubuntu 23.04+, Mint 22, MX 23…
     runs-on: ubuntu-latest
     container: debian:12
