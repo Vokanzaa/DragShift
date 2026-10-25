@@ -162,18 +162,33 @@ class _LiquidJob(QRunnable):
         self.args = (serial, backdrop, w, h, radius, style)
         self.sig = _LiquidSig()
 
+    def _emit(self, name, *args):
+        try:
+            getattr(self.sig, name).emit(*args)
+            return True
+        except RuntimeError:
+            from shiboken6 import isValid
+            # QApplication teardown may destroy the signal owner during render.
+            # Test after the failed emit: a pre-check alone would still race.
+            if isValid(self.sig):
+                raise
+            return False
+
     def run(self):
         serial, backdrop, w, h, radius, style = self.args
         try:
             from . import liquid
             sdf = liquid.sdf_rounded_rect(w, h, .5, .5, w - .5, h - .5, radius)
             image, light = liquid.render(backdrop, sdf, style, tint=neutral_tint())
-            self.sig.done.emit(serial, qimage_from_pil(image), light)
+            self._emit("done", serial, qimage_from_pil(image), light)
         except Exception:
             import traceback
             traceback.print_exc()
         finally:
-            self.sig.finished.emit(self)
+            if not self._emit("finished", self):
+                # No GUI receiver remains to handle the usual queued cleanup.
+                from .util import release
+                release(self)
 
 
 def grab_screen(x: int, y: int, w: int, h: int, below_window: int = 0):
