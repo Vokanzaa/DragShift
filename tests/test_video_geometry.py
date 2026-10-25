@@ -42,6 +42,24 @@ def test_pixel_resize_and_crop_matches_preview(clip):
             video.transform(clip,**bad)
 
 
+def test_old_engine_is_rejected_before_publishing_a_shortened_video(clip,monkeypatch):
+    original=video.capture
+    before=clip.read_bytes()
+    existing=set(clip.parent.iterdir())
+    def legacy_version(args,*positional,**kwargs):
+        if args[-1]=='-version':
+            return b'ffmpeg version 5.1.2\nlibavformat 59.27.100 / 59.27.100\n'
+        return original(args,*positional,**kwargs)
+    video._precise_timing_supported.cache_clear()
+    monkeypatch.setattr(video,'capture',legacy_version)
+    try:
+        with pytest.raises(UserError,match='FFmpeg 7'):
+            video.transform(clip,speed=.5)
+        assert clip.read_bytes()==before and set(clip.parent.iterdir())==existing
+    finally:
+        video._precise_timing_supported.cache_clear()
+
+
 @pytest.mark.parametrize('speed',[.5,1,2])
 @pytest.mark.parametrize('start',[0,.1])
 @pytest.mark.parametrize('variable_rate',[False,True])

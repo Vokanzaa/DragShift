@@ -21,6 +21,16 @@ def test_native_engine_platform_selection():
         module.ffglitch_url('Windows','arm64')
 
 
+def test_linux_ffmpeg_checksum_requires_the_exact_asset_and_valid_hash():
+    module=engine_module()
+    digest='abcdef01'*8
+    assert module.checksum_for_asset(digest+'  ffmpeg.tar.xz\n','ffmpeg.tar.xz')==digest
+    assert module.checksum_for_asset(digest.upper()+' *ffmpeg.tar.xz\n','ffmpeg.tar.xz')==digest
+    for text in (digest+'  another.tar.xz', 'bad  ffmpeg.tar.xz'):
+        with pytest.raises(RuntimeError,match='checksum'):
+            module.checksum_for_asset(text,'ffmpeg.tar.xz')
+
+
 def test_windows_sevenzip_ignores_chocolatey_shim(tmp_path, monkeypatch):
     module = engine_module()
     shim = tmp_path / 'chocolatey' / 'bin' / '7z.exe'
