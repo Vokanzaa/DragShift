@@ -400,7 +400,9 @@ def transform(src, *, start=0., end=None, max_side=None, crf=23, crop_ratio=None
         # FFmpeg 7's setpts clears frame durations and rate metadata, shortening
         # the final frame. Rescale encoded PTS, DTS and durations together;
         # passthrough preserves irregular frame intervals and every source frame.
-        args += ["-fps_mode", "passthrough", "-enc_time_base", "filter", "-bsf:v",
+        # An explicit microsecond timebase also works with Debian's FFmpeg 5,
+        # which does not recognize the newer symbolic "filter" value.
+        args += ["-fps_mode", "passthrough", "-enc_time_base:v", "1:1000000", "-bsf:v",
                  f"setts=pts=(PTS-STARTPTS)/{speed}:dts=(DTS-STARTPTS)/{speed}:duration=DURATION/{speed}"]
         # B-frame reordering can lose VFR durations in the MP4 encoding path.
         args += _video_codec("MP4", crf) + ["-bf", "0", str(tmp)]
