@@ -12,13 +12,17 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 from . import video
 from .util import UserError
 
 TARGETS = ["MP3", "WAV", "FLAC", "M4A", "AAC", "OGG", "OPUS", "AIFF"]
+AUDIO_ENCODERS = {"MP3": "libmp3lame", "WAV": "pcm_s16le", "FLAC": "flac", "M4A": "aac",
+                  "AAC": "aac", "OGG": "libvorbis", "OPUS": "libopus", "AIFF": "pcm_s16be"}
 SAMPLE_RATES = (8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000, 64000, 88200, 96000)
 AUDIO_FILTER = "Audio (*.mp3 *.wav *.flac *.m4a *.aac *.ogg *.opus *.aiff *.aif *.wma *.ape *.alac);;All files (*)"
 _AAC_RATES = SAMPLE_RATES
@@ -88,18 +92,41 @@ def _rate(target: str, desired: int, explicit=False) -> int:
     return min(choices, key=lambda r: abs(r - desired))
 
 
+@lru_cache(maxsize=16)
+def _engine_capabilities(path: str, size: int, modified_ns: int, kind: str) -> frozenset[str]:
+    """Read compiled features once per executable revision, not its configure claims."""
+    text = video.capture([path, "-hide_banner", "-" + kind]).decode("utf-8", "replace")
+    # Recent FFmpeg lists two filter flags; older builds (including FFglitch)
+    # include the third command-support flag.
+    flags = r"[TSC.]{2,3}" if kind == "filters" else r"[VAS][A-Z.]{5}"
+    return frozenset(re.findall(r"^\s*" + flags + r"\s+(\w[\w-]*)\s+", text, re.MULTILINE))
+
+
+def engine_capabilities(kind="encoders", name="ffmpeg") -> frozenset[str]:
+    """Compiled encoder/decoder/filter names, shared with the release staging gate."""
+    if kind not in ("encoders", "decoders", "filters"):
+        raise ValueError("Choose encoders, decoders or filters.")
+    path = Path(video.executable(name)).resolve()
+    info = path.stat()
+    return _engine_capabilities(str(path), info.st_size, info.st_mtime_ns, kind)
+
+
 def _codec(target: str, rate: int, channels: int, bitrate=192) -> list[str]:
+    encoder = AUDIO_ENCODERS[target]
+    if encoder not in engine_capabilities():
+        raise UserError(f"Export to {target} is unavailable: this media engine is missing '{encoder}'. "
+                        "Choose a full FFmpeg build or reinstall DragShift with its bundled media engines.")
     recipes = {
-        "MP3": ["-c:a", "libmp3lame", "-b:a", f"{bitrate}k"],
-        "WAV": ["-c:a", "pcm_s16le"],
-        "FLAC": ["-c:a", "flac"],
-        "M4A": ["-c:a", "aac", "-b:a", f"{bitrate}k", "-movflags", "+faststart"],
-        "AAC": ["-c:a", "aac", "-b:a", f"{bitrate}k"],
-        "OGG": ["-c:a", "libvorbis", "-q:a", "5"],
-        "OPUS": ["-c:a", "libopus", "-b:a", f"{bitrate}k"],
-        "AIFF": ["-c:a", "pcm_s16be"],
+        "MP3": ["-b:a", f"{bitrate}k"],
+        "WAV": [],
+        "FLAC": [],
+        "M4A": ["-b:a", f"{bitrate}k", "-movflags", "+faststart"],
+        "AAC": ["-b:a", f"{bitrate}k"],
+        "OGG": ["-q:a", "5"],
+        "OPUS": ["-b:a", f"{bitrate}k"],
+        "AIFF": [],
     }
-    args = recipes[target] + ["-ar", str(rate)]
+    args = ["-c:a", encoder] + recipes[target] + ["-ar", str(rate)]
     # MP3 has a maximum of two channels. Other formats retain the source layout.
     if target == "MP3" and channels > 2:
         args += ["-ac", "2"]
