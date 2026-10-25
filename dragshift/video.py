@@ -7,10 +7,12 @@ from __future__ import annotations
 
 import contextlib
 import contextvars
+from functools import lru_cache
 import json
 import math
 import os
 import queue
+import re
 import shutil
 import subprocess
 import sys
@@ -229,6 +231,20 @@ def ffmpeg_args(name="ffmpeg") -> list[str]:
             "-progress", "pipe:1", "-stats_period", "0.25", "-filter_threads", "2"]
 
 
+@lru_cache(maxsize=8)
+def _precise_timing_supported(path: str, size: int, modified_ns: int) -> bool:
+    version = capture([path, "-version"]).decode("utf-8", "replace")
+    major = re.search(r"libavformat\s+(\d+)\.", version)
+    return major is not None and int(major.group(1)) >= 61
+
+
+def require_precise_timing():
+    path = Path(executable("ffmpeg")).resolve()
+    info = path.stat()
+    if not _precise_timing_supported(str(path), info.st_size, info.st_mtime_ns):
+        raise UserError("Precise video editing requires FFmpeg 7 or newer. Reinstall DragShift with its bundled media engines or select a newer FFmpeg build.")
+
+
 def input_options(src):
     # FFmpeg otherwise replaces sub-20 ms GIF delays with its 100 ms default.
     return ['-min_delay','0'] if Path(src).suffix.lower()=='.gif' else []
@@ -375,6 +391,7 @@ def transform(src, *, start=0., end=None, max_side=None, crf=23, crop_ratio=None
             or not -.5 <= brightness <= .5 or not .1 <= contrast <= 3 or not 0 <= saturation <= 3
             or (crop_ratio is not None and not .1 <= crop_ratio <= 10)):
         raise UserError("Choose valid video settings (speed 0.25–4×, size 16–7680 px, rotation 0/90/180/270°).")
+    require_precise_timing()
     vf = edit_filters(max_side=max_side, crop_ratio=crop_ratio,crop_box=crop_box,output_size=output_size,rotation=rotation, flip=flip,
                       brightness=brightness, contrast=contrast, saturation=saturation)
     with export_path(src, label) as (tmp, outs):
@@ -400,8 +417,7 @@ def transform(src, *, start=0., end=None, max_side=None, crf=23, crop_ratio=None
         # FFmpeg 7's setpts clears frame durations and rate metadata, shortening
         # the final frame. Rescale encoded PTS, DTS and durations together;
         # passthrough preserves irregular frame intervals and every source frame.
-        # An explicit microsecond timebase also works with Debian's FFmpeg 5,
-        # which does not recognize the newer symbolic "filter" value.
+        # Keep timestamp precision consistent across the bundled engines.
         args += ["-fps_mode", "passthrough", "-enc_time_base:v", "1:1000000", "-bsf:v",
                  f"setts=pts=(PTS-STARTPTS)/{speed}:dts=(DTS-STARTPTS)/{speed}:duration=DURATION/{speed}"]
         # B-frame reordering can lose VFR durations in the MP4 encoding path.
