@@ -1,4 +1,4 @@
-import io,time,hashlib
+import io,time,hashlib,json
 import pytest
 from PIL import Image,ImageChops
 from PySide6.QtWidgets import QApplication
@@ -40,6 +40,42 @@ def test_pixel_resize_and_crop_matches_preview(clip):
     for bad in ({'output_size':(161,100)},{'crop_box':(.9,0,.2,1)},{'output_size':(8000,100)}):
         with pytest.raises(UserError):
             video.transform(clip,**bad)
+
+
+@pytest.mark.parametrize('speed',[.5,1,2])
+@pytest.mark.parametrize('start',[0,.1])
+@pytest.mark.parametrize('variable_rate',[False,True])
+def test_resize_preserves_frame_timing_and_speed(clip,speed,start,variable_rate):
+    source=clip
+    timestamps=[n/10 for n in range(10)]
+    if variable_rate:
+        source=clip.with_name('variable.mp4')
+        # The sparse VFR fixture must have unambiguous source durations;
+        # ordinary CFR input above still exercises decoding B-frames.
+        video.capture([video.executable('ffmpeg'),'-v','error','-i',str(clip),'-vf',
+            "select='eq(n,0)+eq(n,1)+eq(n,3)+eq(n,6)+eq(n,9)'",'-fps_mode','vfr',
+            '-c:v','libx264','-bf','0','-c:a','copy','-y',str(source)])
+        timestamps=[0,.1,.3,.6,.9]
+    before=source.read_bytes()
+    assert video.probe(source).duration==pytest.approx(1,abs=.001)
+    out=video.transform(source,start=start,end=1,speed=speed,output_size=(160,128))[0]
+    info=video.probe(out)
+    packets=json.loads(video.capture([video.executable('ffprobe'),'-v','error',
+        '-select_streams','v:0','-show_packets','-show_entries','packet=pts_time',
+        '-of','json',str(out)]))['packets']
+    actual=sorted(float(packet['pts_time']) for packet in packets)
+    expected=[(at-start)/speed for at in timestamps if at>=start]
+    assert actual==pytest.approx(expected,abs=.001)
+    frames=json.loads(video.capture([video.executable('ffprobe'),'-v','error',
+        '-select_streams','v:0','-show_frames','-show_entries',
+        'frame=pts_time,duration_time,pkt_duration_time','-of','json',str(out)]))['frames']
+    assert [float(frame['pts_time']) for frame in frames]==pytest.approx(expected,abs=.001)
+    last_duration=float(frames[-1].get('duration_time',frames[-1].get('pkt_duration_time',0)))
+    assert last_duration==pytest.approx(.1/speed,abs=.001)
+    assert float(frames[-1]['pts_time'])+last_duration==pytest.approx((1-start)/speed,abs=.003)
+    assert info.duration==pytest.approx((1-start)/speed,abs=.003)
+    assert (info.width,info.height)==(160,128) and info.has_audio
+    assert source.read_bytes()==before
 
 
 def test_resize_ui_dimensions_proportions_crop_and_export(clip,qt_session):
