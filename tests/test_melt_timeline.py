@@ -117,6 +117,8 @@ def test_timeline_ui_trims_splits_drags_and_keeps_each_cut_independent(sources,q
     assert window.timeline_toggle.isChecked() and not window.classic_panel.isVisible()
     assert window.first_info is None and not window.audio_panel.paths
     panel.select('cut',0)
+    assert panel.start.isHidden() and panel.end.isHidden()
+    assert panel.duration.isVisible() and panel.strength.isVisible()
     panel.duration.setValue(.4)
     panel.strength.setValue(27)
     panel.select('cut',1)
@@ -126,6 +128,8 @@ def test_timeline_ui_trims_splits_drags_and_keeps_each_cut_independent(sources,q
     assert panel.duration.value()==.4 and panel.strength.value()==27
     assert panel.model.cut(1).duration==.8 and panel.model.cut(1).strength==91
     panel.select('clip',1)
+    assert panel.start.isVisible() and panel.end.isVisible()
+    assert panel.duration.isHidden() and panel.strength.isHidden()
     panel.start.setValue(.5)
     panel.end.setValue(2.5)
     panel.end.editingFinished.emit()

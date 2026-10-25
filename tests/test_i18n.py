@@ -19,6 +19,8 @@ def test_russian_labels_templates_diagnostics_and_stable_identifiers(qt_session)
     assert i18n.tr('Save MP4')=='Сохранить MP4'
     assert i18n.tr('25 fps')=='25 кадр/с'
     assert i18n.tr('Video · Resize')=='Видео · Размер'
+    assert i18n.tr('&First seconds of B')=='Первые секунды &B'
+    assert i18n.tr('Zoom')=='Масштаб'
     assert i18n.tr('Output: 160 × 96 px')=='Результат: 160 × 96 пикс.'
     assert i18n.tr('2 files  ·  516.9 KB')=='Файлов: 2  ·  516.9 КБ'
     message='Video processing failed. Try a different format or smaller resolution.\n[libx264] raw diagnostic'

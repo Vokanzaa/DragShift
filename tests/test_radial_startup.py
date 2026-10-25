@@ -51,14 +51,19 @@ def test_launch_with_files_still_routes_to_radial(controller, monkeypatch):
     assert calls == [["clip.mp4"]] and controller.windows == []
 
 
-def test_tray_only_opens_the_control_menu(controller, monkeypatch):
+@pytest.mark.parametrize('mac', [False, True])
+def test_tray_only_opens_the_control_menu(controller, monkeypatch, mac):
+    monkeypatch.setattr(application, 'IS_MAC', mac)
     labels = [action.text() for action in controller.tray_menu.actions()]
     assert "Settings…" in labels
     assert not any("file" in label.lower() or "converter" in label.lower() for label in labels)
     calls = []
     monkeypatch.setattr(controller.tray_menu, "popup", lambda pos: calls.append(pos))
     controller._tray_click(QSystemTrayIcon.Trigger)
-    assert len(calls) == 1 and controller.windows == []
+    # macOS opens the assigned native context menu itself; an explicit popup
+    # would open it twice. Windows/Linux need the Trigger callback.
+    assert controller.tray.contextMenu() is controller.tray_menu
+    assert len(calls) == (0 if mac else 1) and controller.windows == []
 
 
 def test_second_launch_only_shows_a_short_hint(controller, monkeypatch):
