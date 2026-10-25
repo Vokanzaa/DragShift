@@ -118,6 +118,26 @@ def imagemagick_env():
     return env
 
 
+def stage_macos_sdl3(system, machine, dest, cache, records):
+    if system != 'Darwin' or machine.lower() not in ('x86_64', 'amd64'):
+        return
+    # Homebrew's SDL2 compatibility layer dlopens SDL3: it is absent from
+    # Mach-O dependency tables, so PyInstaller cannot collect it automatically.
+    # The loader explicitly checks @executable_path/libSDL3.dylib.
+    prefix = Path(subprocess.check_output(['brew', '--prefix', 'sdl3'], text=True).strip())
+    library = prefix / 'lib/libSDL3.dylib'
+    if not library.is_file():
+        raise RuntimeError('Intel Mac packaging requires the native SDL3 library (brew install sdl3)')
+    shutil.copy2(library, dest / 'libSDL3.dylib')
+    (dest / 'libSDL3.dylib').chmod(0o755)
+    notice = next((path for path in (prefix / 'LICENSE.txt',
+        prefix / 'share/licenses/SDL3/LICENSE.txt') if path.is_file()), None)
+    if notice is None:
+        notice = download('https://raw.githubusercontent.com/libsdl-org/SDL/main/LICENSE.txt',
+                          cache / 'SDL3-LICENSE.txt', records)
+    shutil.copy2(notice, dest / 'SDL3-LICENSE.txt')
+
+
 def stage():
     system, machine = platform.system(), platform.machine()
     suffix = '.exe' if system == 'Windows' else ''
@@ -189,6 +209,7 @@ def stage():
         shutil.copy2(prefix / 'bin' / 'magick', dest / 'magick')
         for name in ('LICENSE', 'NOTICE'):
             shutil.copy2(folder / name, dest / ('ImageMagick-' + name + '.txt'))
+    stage_macos_sdl3(system, machine, dest, cache, records)
     (dest / 'EngineVersions.json').write_text(json.dumps(dict(system=system, machine=machine, downloads=records), indent=2) + '\n', encoding='utf-8')
 
 
