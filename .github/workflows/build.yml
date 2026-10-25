@@ -149,6 +149,9 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
+          # Windowed bundles write Python diagnostics to the application log.
+          # Preserve that evidence when a frozen-only check fails on a runner.
+          trap 'rc=$?; if [ "$rc" -ne 0 ]; then tail -n 160 "$HOME/Library/Logs/DragShift/log.txt" || true; fi; exit "$rc"' EXIT
           dist/DragShift.app/Contents/MacOS/DragShift --selftest
           for language in en ru; do
             DRAGSHIFT_LANGUAGE=$language dist/DragShift.app/Contents/MacOS/DragShift --files-selftest
