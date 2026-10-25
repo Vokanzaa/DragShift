@@ -15,7 +15,9 @@ def selftest():
         return 1
     try:
         with tempfile.TemporaryDirectory(prefix="dragshift-files-check-") as folder:
-            base = Path(folder)
+            # macOS /var aliases and Windows short temp names may resolve to a
+            # different spelling when a saved project's sources are reopened.
+            base = Path(folder).resolve()
             sound = base / "audio.wav"
             video.capture([video.executable("ffmpeg"), "-v", "error", "-f", "lavfi", "-i",
                 "sine=frequency=440:duration=2", "-ar", "44100", "-y", str(sound)])
