@@ -148,6 +148,47 @@ jobs:
       - name: Build DragShift.app
         run: pyinstaller DragShift.spec --noconfirm
 
+      - name: Check relocated media engines before app startup
+        timeout-minutes: 3
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess, tempfile, time
+          engines = Path('dist/DragShift.app/Contents/Frameworks/bin').resolve()
+          def check(args):
+              started = time.monotonic()
+              proc = subprocess.Popen([str(arg) for arg in args], stdin=subprocess.DEVNULL,
+                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+              try:
+                  out, err = proc.communicate(timeout=25)
+              except subprocess.TimeoutExpired:
+                  # A sample distinguishes dyld/signature startup delays from
+                  # codec/thread hangs; never turn a hang into a passing check.
+                  try:
+                      sample = subprocess.run(['sample', str(proc.pid), '2', '1'],
+                                              capture_output=True, text=True, timeout=10)
+                      print(sample.stdout[-22000:] + sample.stderr[-2000:], flush=True)
+                  finally:
+                      proc.kill()
+                      out, err = proc.communicate()
+                      print(err.decode('utf-8', 'replace')[-4000:], flush=True)
+                  raise
+              print(Path(args[0]).name, args[1:4],
+                    f'{time.monotonic() - started:.3f}s, exit {proc.returncode}', flush=True)
+              print((out + err).decode('utf-8', 'replace')[:1200], flush=True)
+              assert proc.returncode == 0
+          for name in ('ffmpeg', 'ffprobe'):
+              check([engines / name, '-version'])
+          with tempfile.TemporaryDirectory(prefix='dragshift-bundle-check-') as folder:
+              output = Path(folder) / 'check.mp4'
+              check([engines / 'ffmpeg', '-v', 'error', '-nostdin', '-f', 'lavfi', '-i',
+                     'testsrc2=size=160x120:rate=24:duration=2', '-f', 'lavfi', '-i',
+                     'sine=frequency=440:duration=2', '-c:v', 'libx264', '-pix_fmt',
+                     'yuv420p', '-c:a', 'aac', '-y', output])
+              check([engines / 'ffprobe', '-v', 'error', '-show_entries',
+                     'format=duration', '-of', 'default=nw=1', output])
+          PY
+
       - name: Self-test the app bundle
         env:
           QT_QPA_PLATFORM: offscreen
