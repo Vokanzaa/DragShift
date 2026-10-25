@@ -105,7 +105,8 @@ class Project:
         # the whole high-resolution width gives a different lens pitch.
         base_w = math.floor(settings.width_mm / 25.4 * settings.lpi)
         aspect = first_size[0] / first_size[1] if settings.auto_height else settings.width_mm / settings.height_mm
-        base_h = round(base_w / aspect)
+        base_h = (round(base_w / aspect) if settings.auto_height
+                  else round(settings.height_mm / 25.4 * settings.lpi))
         if min(base_w, base_h) < 1:
             raise UserError('The selected print size is smaller than one lens.')
         quality = int(settings.quality)
