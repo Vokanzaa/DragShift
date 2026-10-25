@@ -51,6 +51,47 @@ def test_probe_and_metadata(sound):
     assert info.tags.get("title") == "Audio fixture"
 
 
+def test_encoder_inventory_uses_flags_not_help_prose(monkeypatch):
+    audio._engine_capabilities.cache_clear()
+    listing = (b"Encoders:\n A..... = Audio\n A....D aac AAC encoder\n"
+               b" A....D libvorbis libvorbis encoder\n V....D libvpx-vp9 VP9 encoder\n")
+    calls = []
+    monkeypatch.setattr(video, "capture", lambda args: calls.append(args) or listing)
+    assert audio.engine_capabilities("encoders") == {"aac", "libvorbis", "libvpx-vp9"}
+    assert audio.engine_capabilities("encoders") == {"aac", "libvorbis", "libvpx-vp9"}
+    assert len(calls) == 1
+    audio._engine_capabilities.cache_clear()
+
+
+@pytest.mark.parametrize('flags', ['..', '...'])
+def test_filter_inventory_accepts_current_and_legacy_flags(monkeypatch, flags):
+    audio._engine_capabilities.cache_clear()
+    listing = f"Filters:\n T.. = Timeline support\n {flags} acrossfade N->A Cross fade audio.\n".encode()
+    monkeypatch.setattr(video, 'capture', lambda _: listing)
+    try:
+        assert audio.engine_capabilities('filters') == {'acrossfade'}
+    finally:
+        audio._engine_capabilities.cache_clear()
+
+
+def test_missing_vorbis_is_actionable_and_never_attempts_export(sound, monkeypatch):
+    monkeypatch.setattr(audio, "engine_capabilities", lambda *_: frozenset({"aac", "vorbis"}))
+    calls = []
+    monkeypatch.setattr(video, "run_process", lambda *a, **kw: calls.append(a))
+    before = set(sound.parent.iterdir())
+    with pytest.raises(UserError, match="OGG.*libvorbis") as error:
+        audio.convert_audio(sound, "OGG")
+    assert not calls and set(sound.parent.iterdir()) == before
+    from dragshift import i18n
+    try:
+        i18n.set_language('ru')
+        translated = i18n.tr(str(error.value))
+        assert translated.startswith('Экспорт в OGG недоступен')
+        assert 'libvorbis' in translated
+    finally:
+        i18n.set_language('en')
+
+
 @pytest.mark.parametrize("target,codec", [("MP3", "mp3"), ("WAV", "pcm_s16le"), ("FLAC", "flac"),
     ("M4A", "aac"), ("AAC", "aac"), ("OGG", "vorbis"), ("OPUS", "opus"), ("AIFF", "pcm_s16be")])
 def test_all_output_formats_preserve_original(sound, target, codec):

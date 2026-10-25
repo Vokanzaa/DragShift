@@ -50,3 +50,42 @@ def test_imagemagick_linker_paths_include_pkgconfig_system_dirs(monkeypatch):
     assert calls == [['pkg-config', '--print-errors', '--exists',
                       'lqr-1 >= 0.1.0', 'libpng', 'glib-2.0']]
     assert env['LDFLAGS'] == '-Wl,-dead_strip -L/opt/homebrew/lib'
+
+
+def test_macos_stages_full_native_ffmpeg_without_relinking():
+    workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/build.yml').read_text(encoding='utf-8')
+    macos = workflow.split('  macos:', 1)[1].split('  linux:', 1)[0]
+    assert 'ffmpeg_formula: ffmpeg-full' in macos
+    assert 'ffmpeg_formula: ffmpeg@7' in macos
+    assert 'brew install "$FFMPEG_FORMULA"' in macos
+    assert 'export PATH="$(brew --prefix "$FFMPEG_FORMULA")/bin:$PATH"' in macos
+    assert macos.index('export PATH=') < macos.index('python packaging/media_engines.py --stage')
+    assert 'brew link' not in macos
+
+
+@pytest.mark.parametrize('kind,missing', [('encoders', 'libvorbis'), ('encoders', 'libvpx-vp9'),
+    ('encoders', 'libmp3lame'), ('decoders', 'libvpx-vp9'), ('filters', 'loudnorm'),
+    ('filters', 'acrossfade'), ('filters', 'acrusher')])
+def test_required_ffmpeg_capability_gate_rejects_incomplete_build(monkeypatch, kind, missing):
+    from dragshift import audio
+    module = engine_module()
+    required = module.required_capabilities()['ffmpeg']
+    def available(requested, name='ffmpeg'):
+        result = required[requested]
+        return result - {missing} if requested == kind else result
+    monkeypatch.setattr(audio, 'engine_capabilities', available)
+    with pytest.raises(RuntimeError, match=missing):
+        module.check_media_capabilities('ffmpeg')
+
+
+def test_required_capability_gate_covers_audio_video_and_melt_recipes(monkeypatch):
+    from dragshift import audio
+    module = engine_module()
+    required = module.required_capabilities()
+    assert set(audio.AUDIO_ENCODERS.values()) <= required['ffmpeg']['encoders']
+    assert {'libx264', 'libvpx-vp9', 'mpeg4', 'gif', 'png'} <= required['ffmpeg']['encoders']
+    assert {'amix', 'asetnsamples', 'asplit', 'volume', 'acrusher'} <= required['ffmpeg']['filters']
+    assert {'scale', 'fps', 'setsar', 'tpad', 'trim', 'concat', 'pad'} <= required['ffgac']['filters']
+    monkeypatch.setattr(audio, 'engine_capabilities', lambda kind, name='ffmpeg': required[name][kind])
+    assert module.check_media_capabilities('ffmpeg')
+    assert module.check_media_capabilities('ffgac')
