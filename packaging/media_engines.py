@@ -158,6 +158,40 @@ def stage():
     (dest / 'EngineVersions.json').write_text(json.dumps(dict(system=system, machine=machine, downloads=records), indent=2) + '\n', encoding='utf-8')
 
 
+def required_capabilities():
+    """Features explicitly used by the shipped media recipes, not optional codecs."""
+    from dragshift.audio import AUDIO_ENCODERS
+    return {
+        'ffmpeg': {
+            'encoders': frozenset(AUDIO_ENCODERS.values()) | {
+                'libx264', 'libvpx-vp9', 'mpeg4', 'gif', 'png', 'pcm_f32le'},
+            # The libvpx decoder, rather than native vp9, preserves WebM alpha.
+            'decoders': frozenset({'libvpx-vp9'}),
+            'filters': frozenset({'acrossfade', 'acrusher', 'afade', 'aformat', 'amix', 'anullsrc',
+                'apad', 'aresample', 'areverse', 'asetnsamples', 'asetpts', 'asplit', 'atempo',
+                'atrim', 'concat', 'crop', 'eq', 'format', 'fps', 'hflip', 'loudnorm', 'pad',
+                'palettegen', 'paletteuse', 'scale', 'setpts', 'setsar', 'tpad', 'transpose',
+                'trim', 'vflip', 'volume'}),
+        },
+        'ffgac': {
+            'encoders': frozenset({'mpeg4'}),
+            'filters': frozenset({'concat', 'format', 'fps', 'pad', 'scale', 'setpts',
+                                  'setsar', 'tpad', 'trim'}),
+        },
+    }
+
+
+def check_media_capabilities(name):
+    from dragshift.audio import engine_capabilities
+    required = required_capabilities()[name]
+    for kind, expected in required.items():
+        missing = expected - engine_capabilities(kind, name)
+        if missing:
+            hint = ' Stage a full FFmpeg build; macOS needs the selected keg bin first on PATH.' if name == 'ffmpeg' else ''
+            raise RuntimeError(f'{name} is missing required {kind}: {", ".join(sorted(missing))}.' + hint)
+    return {kind: sorted(names) for kind, names in required.items()}
+
+
 def check():
     sys.path.insert(0, str(ROOT))
     from dragshift import video, archives
@@ -168,6 +202,10 @@ def check():
         if name == 'magick' and (' lqr ' not in value or 'png' not in value.lower()):
             raise RuntimeError('ImageMagick requires PNG and Liquid Rescale support:\n' + value)
         versions[name] = value.splitlines()[0]
+    # A valid -version can still be a stripped build (e.g. Homebrew ffmpeg
+    # without libvorbis). Fail during staging, before editor tests or packaging.
+    for name in ('ffmpeg', 'ffgac'):
+        versions[name + '_required_features'] = check_media_capabilities(name)
     video.capture([archives.executable(), 'i'])
     print(json.dumps(versions, indent=2))
 
