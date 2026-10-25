@@ -53,7 +53,10 @@ jobs:
               $env:DRAGSHIFT_LANGUAGE = $language
               foreach ($flag in @('--selftest', '--files-selftest')) {
                 $p = Start-Process -FilePath $exe -ArgumentList $flag -Wait -PassThru
-                if ($p.ExitCode -ne 0) { throw "$language $flag failed for $exe ($($p.ExitCode))" }
+                if ($p.ExitCode -ne 0) {
+                  Get-Content -LiteralPath "$env:LOCALAPPDATA\DragShift\log.txt" -Tail 160 -ErrorAction Continue
+                  throw "$language $flag failed for $exe ($($p.ExitCode))"
+                }
               }
             }
             "Self-test passed: $exe"
