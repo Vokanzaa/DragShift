@@ -64,6 +64,61 @@ def test_imagemagick_linker_paths_include_pkgconfig_system_dirs(monkeypatch):
     assert env['LDFLAGS'] == '-Wl,-dead_strip -L/opt/homebrew/lib'
 
 
+def test_intel_mac_stages_sdl3_beside_engine_for_dynamic_compat_loader(tmp_path, monkeypatch):
+    module = engine_module()
+    prefix, dest = tmp_path / 'sdl3', tmp_path / 'bin'
+    (prefix / 'lib').mkdir(parents=True)
+    dest.mkdir()
+    (prefix / 'lib/libSDL3.dylib').write_bytes(b'native SDL3 library')
+    (prefix / 'LICENSE.txt').write_text('SDL zlib license', encoding='utf-8')
+    calls = []
+    def brew(args, **kwargs):
+        calls.append(args)
+        return str(prefix) + '\n'
+    monkeypatch.setattr(module.subprocess, 'check_output', brew)
+    module.stage_macos_sdl3('Darwin', 'x86_64', dest, tmp_path, [])
+    assert calls == [['brew', '--prefix', 'sdl3']]
+    # SDL2-compat searches @executable_path/libSDL3.dylib, not its versioned basename.
+    assert (dest / 'libSDL3.dylib').read_bytes() == b'native SDL3 library'
+    assert (dest / 'SDL3-LICENSE.txt').read_text(encoding='utf-8') == 'SDL zlib license'
+
+
+def test_intel_mac_rejects_missing_dynamic_sdl3_before_packaging(tmp_path, monkeypatch):
+    module = engine_module()
+    monkeypatch.setattr(module.subprocess, 'check_output', lambda *args, **kwargs: str(tmp_path))
+    with pytest.raises(RuntimeError, match='SDL3'):
+        module.stage_macos_sdl3('Darwin', 'x86_64', tmp_path, tmp_path, [])
+
+
+def test_sdl3_notice_is_supplied_when_package_prefix_omits_it(tmp_path, monkeypatch):
+    module = engine_module()
+    prefix, dest, cache = tmp_path / 'sdl3', tmp_path / 'bin', tmp_path / 'cache'
+    (prefix / 'lib').mkdir(parents=True)
+    dest.mkdir()
+    cache.mkdir()
+    (prefix / 'lib/libSDL3.dylib').write_bytes(b'SDL3')
+    monkeypatch.setattr(module.subprocess, 'check_output', lambda *args, **kwargs: str(prefix))
+    calls = []
+    def notice(url, target, records):
+        calls.append(url)
+        target.write_text('SDL zlib notice', encoding='utf-8')
+        return target
+    monkeypatch.setattr(module, 'download', notice)
+    module.stage_macos_sdl3('Darwin', 'AMD64', dest, cache, [])
+    assert calls == ['https://raw.githubusercontent.com/libsdl-org/SDL/main/LICENSE.txt']
+    assert (dest / 'SDL3-LICENSE.txt').read_text(encoding='utf-8') == 'SDL zlib notice'
+
+
+@pytest.mark.parametrize('system,machine', [('Windows', 'AMD64'), ('Linux', 'x86_64'), ('Darwin', 'arm64')])
+def test_sdl3_compat_dependency_leaves_other_platforms_unchanged(tmp_path, monkeypatch, system, machine):
+    module = engine_module()
+    def unexpected(*args, **kwargs):
+        pytest.fail('SDL3 compatibility staging must be Intel Mac only')
+    monkeypatch.setattr(module.subprocess, 'check_output', unexpected)
+    module.stage_macos_sdl3(system, machine, tmp_path, tmp_path, [])
+    assert not list(tmp_path.iterdir())
+
+
 def test_macos_stages_full_native_ffmpeg_without_relinking():
     workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/build.yml').read_text(encoding='utf-8')
     macos = workflow.split('  macos:', 1)[1].split('  linux:', 1)[0]
