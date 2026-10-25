@@ -42,7 +42,7 @@ DOCX → PDF uses Microsoft Word when available, otherwise a basic local rendere
 
 ## Video and Datamosh
 
-MP4/MKV/MOV use H.264 and AAC, WebM uses VP9 and Opus, and AVI uses MPEG-4 video. GIF exports from video use 12 fps and an edge up to 640 px. Video edits save a new MP4. Speed ranges from 0.25× to 4× and preserves audio pitch. The frame preview updates with rotation, centre crop, mirror and colour settings using the same filters as export. Trim has two range handles synchronized with its start/end numeric fields; the frame slider also allows scrubbing.
+MP4/MKV/MOV use H.264 and AAC, WebM uses VP9 and Opus, and AVI uses MPEG-4 video. GIF exports from video use 12 fps and an edge up to 640 px. Video edits save a new MP4. Speed ranges from 0.25× to 4× and preserves audio pitch. Editing retains every source frame and variable frame intervals; speed scales those intervals. Edited MP4s disable B-frame reordering to preserve final-frame timing, which can increase file size at the same quality. The frame preview updates with rotation, centre crop, mirror and colour settings using the same filters as export. Trim has two range handles synchronized with its start/end numeric fields; the frame slider also allows scrubbing.
 
 **Tools → Resize** opens a crop frame with draggable edges/corners, numeric Left/Right/Top/Bottom amounts, output Width/Height in pixels and Keep proportions. Scrub to inspect another frame. Crop coordinates follow the displayed orientation and square-pixel geometry; export uses the same crop, preserves audio and writes a new MP4. Output dimensions are rounded to even pixels, 16–7680. In a batch the same relative crop and output size apply to every video.
 
