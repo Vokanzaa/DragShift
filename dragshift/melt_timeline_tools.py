@@ -212,6 +212,7 @@ class MeltTimelinePanel(QWidget):
         self.preview_label.setMaximumHeight(115)
         layout.addWidget(self.preview_label)
         form = QFormLayout()
+        self.parameter_form = form
         self.selected_label = QLabel()
         self.selected_label.setWordWrap(True)
         form.addRow(self.selected_label)
@@ -229,6 +230,7 @@ class MeltTimelinePanel(QWidget):
         row = QHBoxLayout()
         row.addWidget(self.strength,1)
         row.addWidget(value_editor(self.strength,'Datamosh intensity'))
+        self.strength_row = row
         form.addRow(tr('Intensity'),row)
         self.resolution = QComboBox()
         for px in (360,720,1080,1440,2160): self.resolution.addItem(tr(str(px)+' px'),px)
@@ -331,6 +333,12 @@ class MeltTimelinePanel(QWidget):
             index = min(index,max(0,len(self.model.clips)-(2 if kind=='cut' else 1)))
             self.selection = kind,index
         active = bool(self.model.clips)
+        # Show the controls for the selected item first, without inactive clip
+        # fields pushing a cut's strength and duration below the scroll area.
+        for field in (self.start, self.end):
+            self.parameter_form.setRowVisible(field, kind == 'clip')
+        for field in (self.enabled, self.duration, self.strength_row):
+            self.parameter_form.setRowVisible(field, kind == 'cut')
         for key in ('←','→','Remove clip'):
             self.edit_buttons[key].setEnabled(active and kind=='clip')
         self.edit_buttons['Split at playhead'].setEnabled(active)
