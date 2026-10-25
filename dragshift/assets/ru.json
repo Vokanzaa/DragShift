@@ -761,5 +761,6 @@
   "Transition duration": "Длительность перехода",
   "Transition {0} → {1} · classic Melt": "Переход {0} → {1} · классический Melt",
   "Edit a video sequence on the timeline": "Собрать несколько видео на таймлайне",
-  " mm": " мм"
+  " mm": " мм",
+  "Export to {0} is unavailable: this media engine is missing '{1}'. Choose a full FFmpeg build or reinstall DragShift with its bundled media engines.": "Экспорт в {0} недоступен: в движке обработки нет кодека «{1}». Выберите полную сборку FFmpeg или переустановите DragShift вместе с его движками обработки."
 }
