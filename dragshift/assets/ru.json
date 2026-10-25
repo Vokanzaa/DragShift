@@ -311,7 +311,6 @@
   "This segment could not fit within 256 KB. Choose a shorter segment.": "Участок не удалось уложить в 256 КБ. Сократите его.",
   "This video has no audio track to extract.": "В видео нет звука для извлечения.",
   "This video has no usable duration or dimensions. Try a different file.": "Не удалось определить длительность или размер видео. Выберите другой файл.",
-  "Tip the developer ♥": "Поддержать разработчика ♥",
   "Too many selected items to pack.": "Выбрано слишком много объектов для упаковки.",
   "Transition": "Переходы",
   "Trim": "Обрезать",
