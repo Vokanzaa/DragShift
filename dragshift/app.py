@@ -10,8 +10,8 @@ import time
 import traceback
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QPointF, QRunnable, Qt, QThreadPool, QTimer, QUrl, Signal
-from PySide6.QtGui import (QAction, QColor, QCursor, QDesktopServices, QGuiApplication, QIcon, QPainter,
+from PySide6.QtCore import QObject, QPointF, QRunnable, Qt, QThreadPool, QTimer, Signal
+from PySide6.QtGui import (QAction, QColor, QCursor, QGuiApplication, QIcon, QPainter,
                            QPixmap)
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon, QWidget
@@ -24,7 +24,6 @@ from .trigger import DragShiftWatcher
 from .util import UserError, category, file_size, human_size, keep, release
 
 APP_NAME = "DragShift"
-TIP_URL = "https://cash.app/$AtikaKadesha"
 VERSION = __version__
 IS_WIN = sys.platform == "win32"
 IS_MAC = sys.platform == "darwin"
@@ -192,7 +191,6 @@ class DragShiftApp(QObject):
         m.addSeparator()
         m.addAction(tr("Settings…"), self.open_settings)
         m.addAction(tr("How to use"), self.show_welcome)
-        m.addAction(tr("Tip the developer ♥"), lambda: QDesktopServices.openUrl(QUrl(TIP_URL)))
         m.addSeparator()
         m.addAction(tr(f"Quit {APP_NAME}"), self.qapp.quit)
         self.tray_menu = m
