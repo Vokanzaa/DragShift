@@ -1,5 +1,7 @@
 import importlib.util
+import json
 from pathlib import Path
+import re
 import pytest
 
 
@@ -65,8 +67,13 @@ def test_imagemagick_linker_paths_include_pkgconfig_system_dirs(monkeypatch):
 def test_macos_stages_full_native_ffmpeg_without_relinking():
     workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/build.yml').read_text(encoding='utf-8')
     macos = workflow.split('  macos:', 1)[1].split('  linux:', 1)[0]
-    assert 'ffmpeg_formula: ffmpeg-full' in macos
-    assert 'ffmpeg_formula: ffmpeg@7' in macos
+    matrix = next(line for line in macos.splitlines() if 'include: ${{ fromJSON(' in line)
+    assert 'inputs.mac_intel_only &&' in matrix
+    isolated, normal = [json.loads(value) for value in re.findall(r"'(\[.*?\])'", matrix)]
+    expected = [dict(runner='macos-15', arch='apple-silicon', ffmpeg_formula='ffmpeg-full'),
+                dict(runner='macos-15-intel', arch='intel', ffmpeg_formula='ffmpeg@7')]
+    assert normal == expected
+    assert isolated == [expected[1]]
     assert 'brew install "$FFMPEG_FORMULA"' in macos
     assert 'export PATH="$(brew --prefix "$FFMPEG_FORMULA")/bin:$PATH"' in macos
     assert macos.index('export PATH=') < macos.index('python packaging/media_engines.py --stage')
