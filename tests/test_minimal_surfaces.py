@@ -113,6 +113,59 @@ def test_radial_can_be_deleted_while_refraction_is_rendering(qapp, monkeypatch):
     assert not ALIVE and not errors
 
 
+def test_glass_worker_finishes_when_signal_owner_is_deleted(qapp, monkeypatch, capsys):
+    import threading
+    import shiboken6
+    from PIL import Image
+    from dragshift import liquid
+    from dragshift.util import ALIVE, keep, release
+    entered, resume = threading.Event(), threading.Event()
+    errors = []
+
+    def render(backdrop, *args, **kwargs):
+        entered.set()
+        assert resume.wait(5)
+        return backdrop, True
+
+    def run():
+        try:
+            job.run()
+        except BaseException as error:
+            errors.append(error)
+
+    monkeypatch.setattr(liquid, "render", render)
+    job = keep(glass._LiquidJob(1, Image.new("RGB", (8, 8)), 8, 8, 2, glass.neutral_style()))
+    job.sig.finished.connect(release)
+    worker = threading.Thread(target=run)
+    worker.start()
+    try:
+        assert entered.wait(5)
+        shiboken6.delete(job.sig)
+    finally:
+        resume.set()
+        worker.join(5)
+    assert not worker.is_alive() and not errors
+    assert job not in ALIVE
+    assert not capsys.readouterr().err
+
+
+def test_glass_render_errors_remain_visible(qapp, monkeypatch, capsys):
+    from PIL import Image
+    from dragshift import liquid
+    from dragshift.util import ALIVE, keep, release
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("render failure regression")
+
+    monkeypatch.setattr(liquid, "render", fail)
+    job = keep(glass._LiquidJob(1, Image.new("RGB", (8, 8)), 8, 8, 2, glass.neutral_style()))
+    job.sig.finished.connect(release)
+    job.run()
+    qapp.processEvents()
+    assert job not in ALIVE
+    assert "render failure regression" in capsys.readouterr().err
+
+
 def test_radial_drag_and_drop_stays_copy_action(qapp, tmp_path):
     source = tmp_path / "clip.mp4"
     source.write_bytes(b"original")
