@@ -45,6 +45,16 @@ def test_fractional_pitch_rounding_and_frame_aspect(frames):
     assert project.geometry().size_mm == pytest.approx((37.672367718, 25.114911812), abs=1e-5)
 
 
+@pytest.mark.parametrize('height_mm, base_height', [(25.0, 74), (25.3, 75), (38.6, 114)])
+def test_manual_height_rounds_independently_of_quantized_width(frames, height_mm, base_height):
+    project = lens.Project(frames, lens.Settings(lpi=74.84, width_mm=37.9,
+        height_mm=height_mm, auto_height=False, quality=1))
+    result, geometry = lens.render(project)
+    assert geometry.source == (111, base_height)
+    assert geometry.tile == result.size == (333, base_height * 3)
+    assert geometry.aspect == pytest.approx(37.9 / height_mm)
+
+
 def test_fit_modes_preserve_alpha_background_crop_and_focus(tmp_path):
     image = Image.new('RGBA', (20, 10), 'red')
     image.paste('blue', (10, 0, 20, 10))

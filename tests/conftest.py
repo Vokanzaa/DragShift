@@ -1,10 +1,12 @@
 """Keep one Qt application alive throughout the suite, including headless CI."""
+import gc
 import os
 
 import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import QCoreApplication, QEvent
 from PySide6.QtWidgets import QApplication
 
 
@@ -14,6 +16,18 @@ def qt_session():
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
     yield app
+
+
+@pytest.fixture(autouse=True)
+def qt_gui_cleanup(qt_session):
+    yield
+    # Tests pump processEvents() without QApplication.exec(). That pump does
+    # not handle DeferredDelete: closed editors can stay in callback cycles,
+    # then get destroyed by Python GC in a later lookup worker. Finish their
+    # queued destruction and collect remaining cycles on the GUI thread.
+    # Autouse setup precedes per-test fixtures, so monkeypatch is undone first.
+    QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+    gc.collect()
 
 
 @pytest.fixture(scope="session")
