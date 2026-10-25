@@ -762,5 +762,15 @@
   "Transition {0} → {1} · classic Melt": "Переход {0} → {1} · классический Melt",
   "Edit a video sequence on the timeline": "Собрать несколько видео на таймлайне",
   " mm": " мм",
-  "Export to {0} is unavailable: this media engine is missing '{1}'. Choose a full FFmpeg build or reinstall DragShift with its bundled media engines.": "Экспорт в {0} недоступен: в движке обработки нет кодека «{1}». Выберите полную сборку FFmpeg или переустановите DragShift вместе с его движками обработки."
+  "Export to {0} is unavailable: this media engine is missing '{1}'. Choose a full FFmpeg build or reinstall DragShift with its bundled media engines.": "Экспорт в {0} недоступен: в движке обработки нет кодека «{1}». Выберите полную сборку FFmpeg или переустановите DragShift вместе с его движками обработки.",
+  "Carry the last image of A into B's motion, then return to a clean B.": "Изображение из конца A перетекает в движение B; после перехода восстанавливается B.",
+  "A · END OF FIRST VIDEO": "A · КОНЕЦ ПЕРВОГО ВИДЕО",
+  "B · START OF SECOND VIDEO": "B · НАЧАЛО ВТОРОГО ВИДЕО",
+  "Choose second video…": "Выбрать второе видео…",
+  "Preset": "Эффект",
+  "Keep audio from both selected segments": "Сохранить звук обоих фрагментов",
+  "Create transition": "Создать переход",
+  "Zoom": "Масштаб",
+  "FFglitch motion vectors + keyframe removal · Export: MP4\nMotion-rich footage gives stronger results. B returns cleanly after the transition.\nPreview renders a short 480 px excerpt; open it from the result notification.": "Результат: MP4. Выраженность Melt зависит от движения в исходниках. После перехода восстанавливается B.\nПредпросмотр создаёт короткий ролик до 480 пикс.; откройте его из уведомления.",
+  "&First seconds of B": "Первые секунды &B"
 }
