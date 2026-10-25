@@ -1,6 +1,6 @@
 # DragShift — local file tools
 
-## Custom build 1.1.0+files.7
+## Custom build 1.1.0+files.8
 
 This local extension is based on [llamaboi55/DragShift](https://github.com/llamaboi55/DragShift), upstream commit `88abe0cf392b80ad2db805ef12b020c76a6cf458` retrieved on 2026-10-19. It is not an official upstream release. The custom Windows package adds video, audio, experimental Datamosh and archive workflows to the original Shift-drag radial menu, with neutral matte glass.
 
@@ -24,7 +24,7 @@ For nonadjacent files in a Windows Explorer folder, select them with Ctrl, relea
 
 | Input | Output formats | Tools |
 |---|---|---|
-| Images: PNG, JPG/JPEG, WebP, HEIC/HEIF, AVIF, TIFF, BMP, GIF, ICO | PNG, JPG, WebP, HEIC, AVIF, TIFF, BMP, GIF, ICO, PDF | Compress, resize, crop, colour/light edits, annotate, redact, add background, view/remove metadata, Liquid Rescale distortion |
+| Images: PNG, JPG/JPEG, WebP, HEIC/HEIF, AVIF, TIFF, BMP, GIF, ICO | PNG, JPG, WebP, HEIC, AVIF, TIFF, BMP, GIF, ICO, PDF | Compress, resize, crop, colour/light edits, annotate, redact, add background, view/remove metadata, Liquid Rescale distortion, lenticular interlace/print projects |
 | Video: MP4, MKV, MOV, AVI, WebM, M4V, WMV, FLV, TS/MTS/M2TS, MPEG/MPG, 3GP, OGV, VOB | MP4, MKV, MOV, WebM, AVI, animated GIF, MP3, WAV | Trim, compress, resize, crop/rotate/mirror, speed, colour, mute, PNG frame, metadata, Datamosh, Liquid Rescale distortion, Audio extraction |
 | Audio: MP3, WAV, FLAC, M4A/M4B, AAC, OGG/OGA, Opus, AIFF/AIF, WMA, APE, ALAC, AMR | MP3, WAV, FLAC, M4A, AAC, OGG, Opus, AIFF | Trim, edit, normalize, fade, compress, reverse, metadata |
 | Archives: ZIP, 7Z, RAR, TAR | ZIP, 7Z, TAR | Contents, extract into a new folder |
@@ -32,7 +32,7 @@ For nonadjacent files in a Windows Explorer folder, select them with Ctrl, relea
 | Word DOCX | PDF, TXT | Conversion |
 | Text: TXT, MD, CSV, LOG, JSON, XML, HTML/HTM | PDF, DOCX | Plain-text conversion |
 
-Available decoders and encoders determine whether a particular file is readable. Unsupported extensions have no conversion actions in the radial menu. This is not a general Office, spreadsheet, slide, OCR or 3D converter. Text formats are imported as text, without evaluating HTML, Markdown or spreadsheet formulas. Animated GIF editing preserves composited frames, frame durations, transparency and loop metadata. Animation-capable image outputs (GIF, WebP, PNG/APNG, TIFF, AVIF) retain the sequence; static formats such as JPG use its first frame. GIF also offers MP4 and WebM conversion with its original animation, without a generated camera effect.
+Available decoders and encoders determine whether a particular file is readable. Unsupported extensions have no conversion actions in the radial menu. This is not a general Office, spreadsheet, slide, OCR or 3D converter. Text formats are imported as text, without evaluating HTML, Markdown or spreadsheet formulas. Animated GIF editing preserves composited frames, frame durations, transparency and loop metadata. Converting an animated GIF to PNG, JPG, WebP, HEIC, TIFF, AVIF, BMP or ICO extracts every composited frame into a new uniquely named folder beside the original GIF (`name Frames/frame-000001.ext`, etc.). This destination follows the GIF even if ordinary exports use a subfolder. GIF editing itself retains the animated GIF. GIF also offers MP4 and WebM conversion with its original animation, without a generated camera effect.
 
 GIF-to-video conversion chooses a frame grid compatible with its centisecond delays (at least 30 fps, up to 100 fps) instead of dropping very short source frames. Telegram's separate profile is capped at 30 fps by its specification, so faster animations necessarily lose temporal detail there.
 
@@ -48,15 +48,21 @@ MP4/MKV/MOV use H.264 and AAC, WebM uses VP9 and Opus, and AVI uses MPEG-4 video
 
 **Tools → Audio** extracts the first audio track from a video into any supported audio output format. **Mute** saves an MP4 without audio; **Frame** saves a full-resolution PNG.
 
-For a classic Melt transition or an ordered video series:
+For a classic Melt transition, open **Tools → Datamosh**. With two videos, the familiar A/B controls select the last seconds of A and first seconds of B, transition duration, intensity, size, fps and audio. **Melt** is the only effect. **Render preview** makes a short 480 px sample around the cut.
 
-1. Open **Tools → Datamosh** on a video, or select several together. Add/drop clips and set their order (2–16 clips).
-2. With two clips, select excerpts using **Last seconds of A** / **First seconds of B**, or uncheck the excerpt option to include both full clips. Series of three or more include every clip once in full.
-3. Set transition duration, intensity, longest edge, fps and whether to retain audio. Leave at least two clean frames after the transition in each following clip. **Melt** is the only effect.
-4. Choose a simple strength shape: **Even throughout**, **Gradually stronger**, **Gradually weaker**, or **Burst in the middle**. The intensity slider controls the maximum strength. Drawing is optional: **Custom points…** reveals the curve; click to add a point, drag it or enter its time in seconds and strength. Right-click/Delete removes interior points. Zero is clean video; 100% uses the selected intensity. Markers show clip changes.
-5. **Render preview** exports the same timeline and curve at 480 px. Open it from the result notification. **Create Melt video** saves the selected full-resolution result as MP4.
+For a series, select **Edit a video sequence on the timeline**, or drop three or more videos together (2–16 clips). Drag clip centres to reorder; drag their edges or edit Source start/end to trim. Position the playhead on the ruler and choose **Split at playhead**. Each Melt badge selects that boundary's independent duration, intensity and on/off setting. A split inside one continuous source starts with its added effect off. Preview renders the selected boundary only.
 
-Each bridge uses FFglitch motion-vector editing and I-frame removal, then recovers clean footage. A final FFmpeg pass produces a playable H.264 MP4. Removed frames are compensated at their original timeline positions so later cuts and sound stay aligned. Audio segments are joined; silence fills missing tracks. Datamosh is experimental: motion-rich clips tend to produce stronger artifacts, and source material affects every result.
+The classic renderer edits FFglitch motion vectors and removes the bridge I-frame. It does not mix a clean-video overlay into the result. Retained recovery frames restore ordinary footage after the transition; keep at least two clean frames in each following clip. Audio segments are joined with silence for missing tracks, and removed frames are compensated at their original timeline positions. The final MP4 is H.264. Datamosh is experimental and depends on source motion. Audio glitch remains inside this same dialog with an intensity control and optional time shapes.
+
+## Lenticular preparation and printing
+
+Select two or more images and choose **Tools → Interlace**. Add/drop 2–30 sources in supported image formats, reorder them, crop each source, and choose fill/crop, white-margin fit or stretching. Fitting can be applied to all frames. Set width in millimetres, height or automatic first-image aspect, actual lens pitch (LPI), integer pixels per frame per lens and vertical/horizontal direction. The displayed actual dimensions include whole-lens rounding. A copy grid, gaps and sheet margins also align to complete lenses.
+
+**Save project…** stores source references, order, fitting/crops and print settings in a portable relative-path `.dshift-print` project. Keep the project with its source images when moving it to another computer. Drop the project onto DragShift to reopen it. **Save interlace** writes a unique lossless TIFF, PNG or BMP plus a `.print.json` sidecar with pixel size, physical size and settings. **Export at printer resolution** resamples using the same deterministic raster path as direct printing, at the specified DPI.
+
+On **Windows**, **Print…** opens the printer's native settings and sends an explicitly prepared raster one pixel per device pixel, starting at the printable-area origin. There is no fit-to-page stage; oversize rasters are rejected. A Canon MG3200-series 600 dpi control job matched the reference printer command stream byte for byte after excluding its job timestamp. This establishes that tested driver/settings combination, not every printer or optical assembly. Use the intended paper size, orientation, quality and actual calibrated LPI; driver borderless expansion or subsequent scaling can change lens alignment.
+
+The interlace, projects, image fitting, grid and raster export are shared by **Windows/macOS/Linux**. Calibrated native direct printing is currently Windows-only. Printing a saved file from an external editor is not guaranteed to preserve the same raster path or physical scale.
 
 ### Liquid Rescale distortion
 

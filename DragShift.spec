@@ -71,7 +71,7 @@ if IS_MAC:
             "CFBundleName": "DragShift",
             "CFBundleDisplayName": "DragShift",
             "CFBundleShortVersionString": "1.1.0",
-            "CFBundleVersion": "1.1.7",
+            "CFBundleVersion": "1.1.8",
             "LSUIElement": True,                 # menu-bar app, no Dock icon
             "LSMinimumSystemVersion": "11.0",
             "NSHighResolutionCapable": True,
