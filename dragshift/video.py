@@ -377,7 +377,6 @@ def transform(src, *, start=0., end=None, max_side=None, crf=23, crop_ratio=None
         raise UserError("Choose valid video settings (speed 0.25–4×, size 16–7680 px, rotation 0/90/180/270°).")
     vf = edit_filters(max_side=max_side, crop_ratio=crop_ratio,crop_box=crop_box,output_size=output_size,rotation=rotation, flip=flip,
                       brightness=brightness, contrast=contrast, saturation=saturation)
-    vf.append(f"setpts=(PTS-STARTPTS)/{speed}")
     with export_path(src, label) as (tmp, outs):
         args = ffmpeg_args() + ["-ss", str(start), "-t", str(end - start), *input_options(src), "-i", str(local_file(src)),
                                 "-map", f"0:{info.video_index}", "-vf", ",".join(vf)]
@@ -398,7 +397,13 @@ def transform(src, *, start=0., end=None, max_side=None, crf=23, crop_ratio=None
                 args += ["-af", "asetpts=PTS-STARTPTS," + ",".join(f"atempo={r}" for r in rates)]
         if strip_metadata:
             args += ["-map_metadata", "-1", "-map_metadata:s", "-1", "-map_chapters", "-1"]
-        args += _video_codec("MP4", crf) + [str(tmp)]
+        # FFmpeg 7's setpts clears frame durations and rate metadata, shortening
+        # the final frame. Rescale encoded PTS, DTS and durations together;
+        # passthrough preserves irregular frame intervals and every source frame.
+        args += ["-fps_mode", "passthrough", "-enc_time_base", "filter", "-bsf:v",
+                 f"setts=pts=(PTS-STARTPTS)/{speed}:dts=(DTS-STARTPTS)/{speed}:duration=DURATION/{speed}"]
+        # B-frame reordering can lose VFR durations in the MP4 encoding path.
+        args += _video_codec("MP4", crf) + ["-bf", "0", str(tmp)]
         run_process(args, (end - start) / speed, f"{label}…")
     return outs
 
