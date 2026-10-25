@@ -1,4 +1,5 @@
 {
+  "Precise video editing requires FFmpeg 7 or newer. Reinstall DragShift with its bundled media engines or select a newer FFmpeg build.": "Для точного редактирования видео нужен FFmpeg 7 или новее. Переустановите DragShift с комплектом движков или выберите более новый FFmpeg.",
   "\nExisting files are kept. Folders keep their structure.": "\nСуществующие файлы сохраняются. Структура папок остаётся прежней.",
   "  ·  originals are never modified": "  ·  исходники не изменяются",
   " Hz": " Гц",
