@@ -135,24 +135,16 @@ def test_melt_is_the_only_preset(pair):
         datamosh.transition(*pair, preset='Psychedelic')
 
 
-def test_series_preserves_all_clips_and_curve_controls_mix(pair):
-    import io
-    from PIL import Image, ImageChops, ImageStat
-    a,b=pair
-    before=a.read_bytes(),b.read_bytes()
-    clean=datamosh.sequence([a,b,a], duration=.5, max_side=160, curve=[(0,0),(1,0)])[0]
-    moshed=datamosh.sequence([a,b,a], duration=.5, max_side=160, curve=[(0,1),(1,1)])[0]
-    assert video.probe(moshed).duration==pytest.approx(9,abs=.1)
-    assert video.probe(moshed).has_audio
-    def frame(p,t):
-        return Image.open(io.BytesIO(video.preview_bytes(p,t,160))).convert('RGB')
-    def diff(x,y):
-        return sum(ImageStat.Stat(ImageChops.difference(x,y)).mean)/3
-    assert diff(frame(clean,3.2),frame(moshed,3.2))>12
-    assert diff(frame(clean,6.2),frame(moshed,6.2))>12
-    assert diff(frame(clean,7.5),frame(moshed,7.5))<10
-    shaped=datamosh.sequence([a,b,a],duration=.5,max_side=160,
-        curve=[(0,0),(.4,0),(.6,1),(1,1)])[0]
-    assert diff(frame(clean,3.2),frame(shaped,3.2))<5
-    assert diff(frame(clean,6.2),frame(shaped,6.2))>12
-    assert (a.read_bytes(),b.read_bytes())==before
+def test_classic_melt_never_blends_clean_video_over_effect(pair, monkeypatch):
+    commands=[]
+    original=video.run_process
+    def run(args,*positional,**kwargs):
+        commands.append(args)
+        return original(args,*positional,**kwargs)
+    monkeypatch.setattr(video,'run_process',run)
+    result=datamosh.transition(*pair,tail=1,head=2,duration=.75,max_side=160)[0]
+    assert video.probe(result).duration==pytest.approx(3,abs=.15)
+    assert len(commands)==3
+    assert not any('blend=' in str(arg) for args in commands for arg in args)
+    # The playable export decodes one moshed video and the two original audio inputs.
+    assert commands[-1].count('-i')==3

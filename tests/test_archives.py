@@ -1,6 +1,7 @@
 """Real 7-Zip round trips and pre-extraction safety tests; no user archives."""
 import hashlib
 import io
+import os
 import stat
 import tarfile
 import threading
@@ -212,9 +213,16 @@ def test_reject_ambiguous_listing_name(tmp_path):
     assert set(tmp_path.iterdir()) == {source}
 
 
-def test_engine_sanitizes_control_characters_to_safe_windows_names(tmp_path):
+def test_control_character_engine_normalization_is_audited(tmp_path):
     source = make_zip(tmp_path / "control.zip", {"name\nwith-newline.txt": b"x"})
     members = archives.entries(source)
     assert any(member.name == "name_with-newline.txt" for member in members)
-    folder = archives.extract(source)[0]
-    assert (folder / "name_with-newline.txt").read_bytes() == b"x"
+    if os.name == 'nt':
+        folder = archives.extract(source)[0]
+        assert (folder / "name_with-newline.txt").read_bytes() == b"x"
+    else:
+        # POSIX 7-Zip sanitizes the listing but retains the actual newline on
+        # disk. The audit must refuse that mismatch before publishing a folder.
+        with pytest.raises(UserError, match='unsafe'):
+            archives.extract(source)
+        assert set(tmp_path.iterdir()) == {source}

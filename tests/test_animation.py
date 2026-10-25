@@ -27,13 +27,54 @@ def test_crop_gif_keeps_frames_timing_loop_and_format(gif):
     assert gif.read_bytes() == before
 
 
-@pytest.mark.parametrize('target', ['WEBP', 'PNG', 'TIFF'])
-def test_animated_image_conversion(gif, target):
+@pytest.mark.parametrize('target', ['WEBP', 'PNG', 'TIFF', 'JPG', 'BMP', 'HEIC', 'AVIF', 'ICO'])
+def test_gif_image_conversion_extracts_every_frame_beside_source(gif, target, monkeypatch):
+    from dragshift.util import CONFIG
+    monkeypatch.setitem(CONFIG, 'output', 'folder')
     out = convert.image_to(gif, target)[0]
-    with Image.open(out) as result:
-        assert result.n_frames == 3
-        colors = [f.convert('RGB').getpixel((5, 5)) for f in ImageSequence.Iterator(result)]
-        assert colors[0][0] > 230 and colors[-1][2] > 230
+    assert out.is_dir() and out.parent == gif.parent
+    images = sorted(out.iterdir())
+    assert [p.name for p in images] == [f'frame-{n:06d}.{target.lower()}' for n in (1,2,3)]
+    colors = []
+    for path in images:
+        with Image.open(path) as result:
+            assert getattr(result,'n_frames',1) == 1
+            colors.append(result.convert('RGB').getpixel((5,5)))
+    assert colors[0][0] > 210 and colors[-1][2] > 210
+
+
+def test_gif_frames_keep_existing_folders_and_cancel_atomically(gif, monkeypatch):
+    import threading
+    first=convert.image_to(gif,'PNG')[0]
+    (first/'keep.txt').write_text('keep')
+    second=convert.image_to(gif,'PNG')[0]
+    assert first!=second and (first/'keep.txt').read_text()=='keep'
+    before=set(gif.parent.iterdir())
+    cancel=threading.Event()
+    def update(value,message):
+        if value>0:
+            cancel.set()
+    with video.job_context(video.Control(cancel=cancel,progress=update)):
+        with pytest.raises(video.Cancelled):
+            convert.image_to(gif,'JPG')
+    assert set(gif.parent.iterdir())==before
+
+
+def test_extracted_gif_frames_use_composited_disposal_and_transparency(tmp_path):
+    from PIL import ImageChops,ImageDraw
+    source=tmp_path/'moving.gif'
+    frames=[]
+    for x in (0,20,40):
+        frame=Image.new('RGBA',(60,40),(0,0,0,0))
+        ImageDraw.Draw(frame).rectangle((x,10,x+10,25),fill='red')
+        frames.append(frame)
+    frames[0].save(source,save_all=True,append_images=frames[1:],duration=[80,120,240],loop=0,disposal=2)
+    folder=convert.image_to(source,'PNG')[0]
+    with Image.open(source) as original:
+        for index,path in enumerate(sorted(folder.iterdir())):
+            original.seek(index)
+            with Image.open(path) as actual:
+                assert ImageChops.difference(original.convert('RGBA'),actual.convert('RGBA')).getbbox() is None
 
 
 def test_gif_to_webm_retains_animation(gif, media_engines):

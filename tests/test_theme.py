@@ -106,3 +106,15 @@ def test_image_mapping_is_unchanged_by_neutral_backing(qapp):
     assert restored.x() == pytest.approx(point.x())
     assert restored.y() == pytest.approx(point.y())
     view.close()
+
+
+def test_macos_offscreen_winid_is_never_treated_as_objc_pointer(qapp, monkeypatch):
+    from types import SimpleNamespace
+    from dragshift import platform_mac
+    calls=[]
+    monkeypatch.setattr(platform_mac,'OK',True)
+    monkeypatch.setitem(sys.modules,'objc',SimpleNamespace(objc_object=lambda **kw:calls.append(kw)))
+    widget=QWidget()
+    assert platform_mac.window_number(widget)==0
+    assert calls==[]
+    widget.close()
