@@ -152,9 +152,10 @@ def fit_image(image, frame: Frame, size, *, aspect=None):
     """Shared source fitting for the full export and a cached screen preview."""
     image = flatten(image)
     left, top, right, bottom = frame.crop
-    box = (round(left * image.width), round(top * image.height),
-           max(round(left * image.width) + 1, round(right * image.width)),
-           max(round(top * image.height) + 1, round(bottom * image.height)))
+    x = max(0, min(image.width-1, round(left*image.width)))
+    y = max(0, min(image.height-1, round(top*image.height)))
+    box = (x, y, min(image.width, max(x+1, round(right*image.width))),
+           min(image.height, max(y+1, round(bottom*image.height))))
     image = image.crop(box)
     width, height = size
     if frame.fit == 'cover':

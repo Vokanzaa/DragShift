@@ -356,7 +356,10 @@ class LenticularWindow(_AsyncTools):
             self.crop.set_image(qimage_from_pil(self.raw_preview))
             self.sync_crop_view()
             self.parameters_changed()
-        self.lookup(lambda: (open_preview(path, max_side=850), lens.source_size(path)), done, lambda error: done(error=error))
+        def read():
+            size = lens.source_size(path)
+            return open_preview(path, max_side=850), size
+        self.lookup(read, done, lambda error: done(error=error))
 
     def sync_frame_controls(self):
         self.refreshing = True
