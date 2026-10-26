@@ -1,10 +1,12 @@
 import time
+import json
 from pathlib import Path
 
 import pytest
 from PIL import Image
 from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl
 from PySide6.QtGui import QDropEvent
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 from dragshift import lenticular as lens, report
@@ -139,5 +141,60 @@ def test_oversized_source_is_rejected_before_preview_decode(qapp, images, monkey
     wait(qapp,lambda:not window.preview_busy and not window.metadata_busy)
     assert not decoded and not window.primary_btn.isEnabled()
     assert 'too large' in window.error.text()
+    window.close()
+    qapp.processEvents()
+
+
+def test_new_large_project_automatically_selects_usable_sampling(qapp, images):
+    window = LenticularWindow((images*4)[:10], lambda *args: None)
+    wait(qapp, lambda: window.primary_btn.isEnabled())
+    window.print_width.setValue(2000)
+    window.auto_height.setChecked(False)
+    window.print_height.setValue(2000)
+    window.lpi.setValue(75)
+    assert window.auto_quality.isChecked() and window.project.settings.auto_quality
+    assert window.quality.value() == window.project.settings.quality == 1
+    assert window.primary_btn.isEnabled()
+    assert window.project.geometry().sheet == (59050, 59060)
+    assert window.project.geometry().dpi == 750
+    window.close()
+    qapp.processEvents()
+
+
+def test_legacy_project_preserves_its_explicit_sampling(qapp, images, tmp_path):
+    path = tmp_path/'legacy.dshift-print'
+    project = lens.Project([lens.Frame(value) for value in images], lens.Settings(quality=4, lpi=75.5))
+    lens.save_project(project, path)
+    saved = json.loads(path.read_text(encoding='utf-8'))
+    saved['settings'].pop('auto_quality', None)
+    path.write_text(json.dumps(saved), encoding='utf-8')
+    window = LenticularWindow([path], lambda *args: None)
+    wait(qapp, lambda: window.primary_btn.isEnabled())
+    assert not window.auto_quality.isChecked() and not window.project.settings.auto_quality
+    assert window.quality.value() == window.project.settings.quality == 4
+    window.lpi.setValue(60)
+    window.receive_files(images[:1])
+    assert window.quality.value() == window.project.settings.quality == 4
+    window.close()
+    qapp.processEvents()
+
+
+def test_manual_sampling_keyboard_edit_disables_auto_and_persists(qapp, images):
+    window = LenticularWindow(images, lambda *args: None)
+    window.present()
+    wait(qapp, lambda: window.primary_btn.isEnabled() and not window.preview_busy)
+    assert window.auto_quality.isChecked()
+    window.quality.setFocus()
+    window.quality.lineEdit().selectAll()
+    QTest.keyClicks(window.quality.lineEdit(), '6')
+    QTest.keyClick(window.quality.lineEdit(), Qt.Key_Return)
+    assert not window.auto_quality.isChecked() and not window.project.settings.auto_quality
+    assert window.quality.value() == window.project.settings.quality == 6
+    window.lpi.setValue(75)
+    window.receive_files(images[:1])
+    assert window.quality.value() == window.project.settings.quality == 6
+    window.auto_quality.setChecked(True)
+    assert window.quality.value() == window.project.settings.quality == 3
+    assert window.project.settings.auto_quality
     window.close()
     qapp.processEvents()

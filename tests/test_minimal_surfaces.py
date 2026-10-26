@@ -40,7 +40,7 @@ def test_popup_and_toast_capture_and_render_neutral_frosted_surfaces(qapp, monke
         return image
 
     monkeypatch.setattr(glass, "grab_screen", grab)
-    monkeypatch.setattr(glass, "exclude_from_capture", lambda _: True)
+    monkeypatch.setattr(glass, "allow_capture", lambda _: True)
     ring = menu()
     ring.popup(QPoint(250, 250), ["clip.mp4"])
     card = toasts.ToastCard(toasts.ToastStack())

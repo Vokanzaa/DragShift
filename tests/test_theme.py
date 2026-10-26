@@ -74,7 +74,7 @@ def test_window_preserves_controls_escape_and_glass_capture(qapp, monkeypatch, n
     monkeypatch.setattr(glass, "enable_acrylic", lambda hwnd: native_blur)
     captures = []
     monkeypatch.setattr(glass.LiquidBacking, "capture_at", lambda *args: captures.append(args))
-    monkeypatch.setattr(glass, "exclude_from_capture", lambda *args: True)
+    monkeypatch.setattr(glass, "allow_capture", lambda *args: True)
     window = GlassWindow("Neutral controls", size=(420, 280))
     field = QLineEdit("File name")
     window.body.addWidget(field)
@@ -118,3 +118,110 @@ def test_macos_offscreen_winid_is_never_treated_as_objc_pointer(qapp, monkeypatc
     assert platform_mac.window_number(widget)==0
     assert calls==[]
     widget.close()
+
+
+@pytest.mark.parametrize('capture_fails',[False,True])
+def test_background_capture_only_excludes_window_during_grab(monkeypatch,capture_fails):
+    from PIL import Image
+    from types import SimpleNamespace
+    calls=[]
+    widget=SimpleNamespace(isVisible=lambda:True,winId=lambda:42)
+    monkeypatch.setattr(sys,'platform','win32')
+    monkeypatch.setattr(glass,'_capture_exclusion_available',lambda:True,raising=False)
+    monkeypatch.setattr(glass,'_set_capture_affinity',
+        lambda hwnd,value:calls.append(('affinity',hwnd,value)) or True,raising=False)
+    monkeypatch.setattr(glass,'_flush_compositor',lambda:calls.append(('flush',)) or True,raising=False)
+    def grab(*args):
+        calls.append(('grab',args))
+        if capture_fails:
+            raise OSError('capture unavailable')
+        return Image.new('RGB',(100,80),'blue')
+    monkeypatch.setattr(glass,'grab_screen',grab)
+    result=glass.capture_background(widget,QRect(10,20,100,80))
+    assert calls==[('affinity',42,0x11),('flush',),
+                   ('grab',(10,20,100,80,0)),('affinity',42,0),('flush',)]
+    assert (result is None)==capture_fails
+
+
+def test_failed_exclusion_never_grabs_visible_window(monkeypatch):
+    from types import SimpleNamespace
+    calls=[]
+    widget=SimpleNamespace(isVisible=lambda:True,winId=lambda:42)
+    monkeypatch.setattr(sys,'platform','win32')
+    monkeypatch.setattr(glass,'_capture_exclusion_available',lambda:True,raising=False)
+    monkeypatch.setattr(glass,'_set_capture_affinity',
+        lambda hwnd,value:calls.append(value) or value==0,raising=False)
+    monkeypatch.setattr(glass,'_flush_compositor',lambda:None,raising=False)
+    monkeypatch.setattr(glass,'grab_screen',lambda *_:pytest.fail('recursive capture'))
+    assert glass.capture_background(widget,QRect(0,0,100,80)) is None
+    assert calls==[0x11,0]
+
+
+def test_moving_without_clean_capture_keeps_cached_refraction(qapp,monkeypatch):
+    from PIL import Image
+    from dragshift.util import ALIVE
+    monkeypatch.setattr(glass,'capture_background',lambda *_:Image.new('RGB',(100,80),'blue'),raising=False)
+    widget=QWidget()
+    widget.resize(100,80)
+    backing=glass.LiquidBacking(widget,12)
+    backing.capture_at(QRect(0,0,100,80))
+    deadline=time.monotonic()+5
+    while ALIVE and time.monotonic()<deadline:
+        qapp.processEvents()
+        time.sleep(.005)
+    assert backing.image is not None
+    before=backing.image.copy()
+    backing.moved()
+    assert backing.image==before
+    monkeypatch.setattr(glass,'capture_background',lambda *_:None)
+    backing.capture_at(QRect(30,30,120,90))
+    deadline=time.monotonic()+5
+    while ALIVE and time.monotonic()<deadline:
+        qapp.processEvents()
+        time.sleep(.005)
+    assert backing.image is not None and (backing.image.width(),backing.image.height())==(120,90)
+    assert backing.image.pixelColor(60,45).blue()>backing.image.pixelColor(60,45).red()
+    widget.close()
+
+
+@pytest.mark.parametrize('surface',['editor','toast','ring'])
+def test_showing_surfaces_keeps_normal_capture_affinity(qapp,monkeypatch,surface):
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+    from dragshift import radial,toasts
+    values=[]
+    monkeypatch.setattr(glass,'_set_capture_affinity',lambda hwnd,value:values.append(value) or True)
+    monkeypatch.setattr(glass,'_flush_compositor',lambda:True)
+    monkeypatch.setattr(glass,'enable_acrylic',lambda *_:False)
+    monkeypatch.setattr(glass.LiquidBacking,'capture_at',lambda *_:None)
+    monkeypatch.setattr(glass,'capture_background',lambda *_:None)
+    monkeypatch.setattr(glass,'hidden_drag_images',lambda:nullcontext(SimpleNamespace(rects=[])))
+    if surface=='editor':
+        widget=GlassWindow('Capture controls',size=(420,280))
+        widget.show()
+    elif surface=='toast':
+        widget=toasts.ToastCard(toasts.ToastStack())
+        widget.appear(QRect(0,0,toasts.W,toasts.H))
+    else:
+        widget=radial.RadialMenu(lambda _: {},lambda _:'File')
+        widget.popup(paths=['example.txt'])
+    assert values==[0]
+    widget.close()
+
+
+def test_capture_restore_is_retried_without_another_screen_read(monkeypatch):
+    from PIL import Image
+    from types import SimpleNamespace
+    values=[]
+    reads=[]
+    widget=SimpleNamespace(isVisible=lambda:True,winId=lambda:42)
+    monkeypatch.setattr(sys,'platform','win32')
+    monkeypatch.setattr(glass,'_capture_exclusion_available',lambda:True)
+    def affinity(hwnd,value):
+        values.append(value)
+        return len(values)!=2
+    monkeypatch.setattr(glass,'_set_capture_affinity',affinity)
+    monkeypatch.setattr(glass,'_flush_compositor',lambda:True)
+    monkeypatch.setattr(glass,'grab_screen',lambda *args:reads.append(args) or Image.new('RGB',(100,80)))
+    assert glass.capture_background(widget,QRect(0,0,100,80)) is not None
+    assert values==[0x11,0,0] and len(reads)==1
