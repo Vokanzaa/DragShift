@@ -10,6 +10,9 @@ from pathlib import Path
 from . import video
 from .util import UserError
 
+_PRINT_BAND_BYTES = 8 * 1024 * 1024
+_PRINT_BAND_ROWS = 256
+
 
 def supported():
     return sys.platform == 'win32'
@@ -81,6 +84,8 @@ class Printer:
         ``output`` explicitly redirects the driver job to a file for inspection.
         The normal UI calls this only after the printer dialog is accepted.
         """
+        if callable(getattr(image, 'read_rows', None)):
+            return self._emit_stream(image, output=output, title=title, position=position)
         from ctypes import wintypes as w
         if not self.dc:
             raise UserError('The printer is closed.')
@@ -149,6 +154,111 @@ class Printer:
                 self.gdi.SelectObject(memory, previous)
             if bitmap:
                 self.gdi.DeleteObject(bitmap)
+            if memory:
+                self.gdi.DeleteDC(memory)
+
+    def _emit_stream(self, raster, *, output=None, title='DragShift', position=(0, 0)):
+        """Send bounded RGB bands through the same unscaled BitBlt path.
+
+        Keep one document and page, and place each band at its absolute device
+        row. No whole-page BMP or GDI bitmap is needed. Printer-driver spool
+        storage remains controlled by Windows and the selected driver.
+        """
+        from ctypes import wintypes as w
+        import numpy as np
+        from PIL import Image
+
+        if not self.dc:
+            raise UserError('The printer is closed.')
+        width, height = map(int, raster.size)
+        x, y = map(int, position)
+        if (min(width, height) < 1 or x < 0 or y < 0
+                or x + width > self.printable[0] or y + height > self.printable[1]):
+            raise UserError('The image does not fit the printable area. Reduce its size or choose a larger paper size; automatic fitting is disabled.')
+        if output is not None:
+            output = Path(output).resolve()
+            if output.exists():
+                raise UserError('The print output file already exists. Choose another name.')
+
+        class Document(ctypes.Structure):
+            _fields_ = [('size', ctypes.c_int), ('name', w.LPCWSTR), ('output', w.LPCWSTR),
+                        ('datatype', w.LPCWSTR), ('flags', w.DWORD)]
+
+        # BMP scanlines are padded to four bytes. Limit both the byte budget and
+        # row count, including an exceptionally wide single row when necessary.
+        stride = (width * 3 + 3) & ~3
+        band_rows = max(1, min(_PRINT_BAND_ROWS, _PRINT_BAND_BYTES // stride))
+        document = Document(ctypes.sizeof(Document), title, None, None, 0)
+        memory, started = None, False
+        try:
+            with tempfile.TemporaryDirectory(prefix='dragshift-print-') as folder:
+                folder = Path(folder)
+                path, stage = folder / 'band.bmp', folder / 'job.prn'
+                if output:
+                    document.output = str(stage)
+                memory = self.gdi.CreateCompatibleDC(self.dc)
+                if not memory:
+                    raise UserError('The print raster could not be prepared.')
+                video.check_cancel()
+                if self.gdi.StartDocW(self.dc, ctypes.byref(document)) <= 0:
+                    raise UserError('The printer refused the print job.')
+                started = True
+                if self.gdi.StartPage(self.dc) <= 0:
+                    raise UserError('The printer could not start the page.')
+                for start in range(0, height, band_rows):
+                    video.check_cancel()
+                    stop = min(height, start + band_rows)
+                    pixels = np.asarray(raster.read_rows(start, stop))
+                    if pixels.shape != (stop-start, width, 3) or pixels.dtype != np.uint8:
+                        raise UserError('The print raster could not be prepared.')
+                    with Image.fromarray(pixels) as band:
+                        band.save(path, 'BMP')
+                    bitmap, previous = None, None
+                    try:
+                        # Preserve RGB samples rather than mapping every band to
+                        # the display's compatible-bitmap format. In particular,
+                        # some printer drivers render segmented DDBs differently.
+                        bitmap = self.user.LoadImageW(None, str(path), 0, 0, 0, 0x2010)
+                        if not bitmap:
+                            raise UserError('The print raster could not be prepared.')
+                        previous = self.gdi.SelectObject(memory, bitmap)
+                        if not previous or previous == ctypes.c_void_p(-1).value:
+                            raise UserError('The print raster could not be selected.')
+                        video.check_cancel()
+                        if not self.gdi.BitBlt(self.dc, x, y+start, width, stop-start, memory, 0, 0, 0x00CC0020):
+                            raise UserError('The printer could not receive the raster.')
+                    finally:
+                        if previous and previous != ctypes.c_void_p(-1).value:
+                            self.gdi.SelectObject(memory, previous)
+                        if bitmap:
+                            self.gdi.DeleteObject(bitmap)
+                    video.progress(stop / height, 'Sending print raster…')
+                video.check_cancel()
+                if self.gdi.EndPage(self.dc) <= 0 or self.gdi.EndDoc(self.dc) <= 0:
+                    raise UserError('The printer could not finish the print job.')
+                started = False
+                if output:
+                    video.check_cancel()
+                    with video._publish_lock:
+                        with tempfile.TemporaryDirectory(prefix='.~print-', dir=output.parent) as destination:
+                            import shutil
+                            copied = Path(destination) / 'job.prn'
+                            shutil.copyfile(stage, copied)
+                            video.check_cancel()
+                            try:
+                                os.link(copied, output)
+                            except FileExistsError:
+                                raise UserError('The print output file already exists. Choose another name.')
+                            except OSError:
+                                if os.name != 'nt':
+                                    raise
+                                try:
+                                    os.rename(copied, output)  # Windows refuses replacement.
+                                except FileExistsError:
+                                    raise UserError('The print output file already exists. Choose another name.')
+        finally:
+            if started:
+                self.gdi.AbortDoc(self.dc)
             if memory:
                 self.gdi.DeleteDC(memory)
 

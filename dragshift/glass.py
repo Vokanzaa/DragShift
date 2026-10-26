@@ -126,17 +126,69 @@ def rounded_rect_path(r: QRectF, radius: float) -> QPainterPath:
 
 
 # ---------------------------------------------------------------- live liquid backing
-def exclude_from_capture(hwnd: int) -> bool:
-    """Allow refreshing the background without capturing the glass itself."""
-    if sys.platform == "darwin":
-        from . import platform_mac
-        return platform_mac.OK
-    if sys.platform != "win32" or os.environ.get("DRAGSHIFT_RECORDING"):
+def _set_capture_affinity(hwnd: int, value: int) -> bool:
+    if sys.platform != "win32":
         return False
     try:
-        return bool(ctypes.windll.user32.SetWindowDisplayAffinity(ctypes.c_void_p(hwnd), 0x11))
+        function = ctypes.windll.user32.SetWindowDisplayAffinity
+        function.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+        function.restype = ctypes.c_int
+        return bool(function(ctypes.c_void_p(hwnd), value))
     except Exception:
         return False
+
+
+def _flush_compositor() -> bool:
+    try:
+        return ctypes.windll.dwmapi.DwmFlush() >= 0
+    except Exception:
+        return False
+
+
+def allow_capture(hwnd: int) -> bool:
+    """Keep normal windows visible to screenshots and screen sharing."""
+    restored = _set_capture_affinity(hwnd, 0)  # WDA_NONE
+    if restored:
+        _flush_compositor()
+    return restored
+
+
+def _capture_exclusion_available() -> bool:
+    # Older Windows treats 0x11 as a black capture rectangle, not a clean backdrop.
+    try:
+        return (sys.platform == "win32" and not os.environ.get("DRAGSHIFT_RECORDING")
+                and sys.getwindowsversion().build >= 19041)
+    except AttributeError:
+        return False
+
+
+def capture_background(widget, rect):
+    """Capture a clean backdrop; never leave a visible window capture-protected."""
+    def grab(below=0):
+        try:
+            return grab_screen(rect.x(), rect.y(), rect.width(), rect.height(), below)
+        except Exception:
+            return None  # Decorative capture can fall back to the last clean image.
+    if not widget.isVisible():
+        return grab()
+    if sys.platform == "darwin":
+        from . import platform_mac
+        below = platform_mac.window_number(widget) if platform_mac.OK else 0
+        return grab(below) if below else None
+    if _capture_exclusion_available():
+        hwnd = int(widget.winId())
+        try:
+            if not _set_capture_affinity(hwnd, 0x11):
+                return None
+            if not _flush_compositor():
+                return None
+            return grab()
+        finally:
+            # The exclusion lasts only for this synchronous screen read, even
+            # if capture fails. Rendering happens later with normal affinity.
+            if not allow_capture(hwnd):
+                allow_capture(hwnd)
+    return None
 
 
 from PySide6.QtCore import QObject, QRect, QRunnable, QThreadPool, QTimer, Signal, Slot  # noqa: E402
@@ -198,7 +250,7 @@ def grab_screen(x: int, y: int, w: int, h: int, below_window: int = 0):
         from . import platform_mac
         if platform_mac.OK:
             im = platform_mac.capture(x, y, w, h, below_window)
-            if im is not None:
+            if im is not None or below_window:
                 return im
     from PySide6.QtCore import QPoint
     from PySide6.QtGui import QGuiApplication
@@ -224,18 +276,22 @@ class LiquidBacking(QObject):
         self.style = style or neutral_style()
         self.image: QImage | None = None
         self.is_light = True
-        self.excluded = False
+        self._backdrop = None
         self._serial = 0
         self._debounce = QTimer(self, singleShot=True, interval=140, timeout=self.refresh)
 
     def capture_at(self, rect: QRect):
-        below = 0
-        if sys.platform == "darwin" and self.w.isVisible():
-            from . import platform_mac
-            below = platform_mac.window_number(self.w)
-        backdrop = grab_screen(rect.x(), rect.y(), rect.width(), rect.height(), below)
-        if backdrop is None:
+        if min(rect.width(), rect.height()) <= 0:
             return
+        backdrop = capture_background(self.w, rect)
+        if backdrop is None:
+            if self._backdrop is None:
+                return
+            # Without a safe platform capture path, reuse clean pixels rather
+            # than recursively capturing our own already refracted surface.
+            backdrop = self._backdrop.resize((rect.width(), rect.height()))
+        else:
+            self._backdrop = backdrop
         self._serial += 1
         job = _LiquidJob(self._serial, backdrop, rect.width(), rect.height(), self.radius, self.style)
         from .util import keep, release
@@ -252,15 +308,12 @@ class LiquidBacking(QObject):
 
     def moved(self):
         self._serial += 1  # discard a render captured at the old location or size
-        if self.excluded:
-            if self.image is not None and self.image.size() != self.w.size():
-                self.image = None
-            self._debounce.start()
-        else:
-            self.image = None  # never re-capture a visible window without exclusion
+        if self.image is not None and self.image.size() != self.w.size():
+            self.image = None
+        self._debounce.start()
 
     def refresh(self):
-        if self.excluded and self.w.isVisible():
+        if self.w.isVisible():
             self.capture_at(self.w.frameGeometry())
 
 

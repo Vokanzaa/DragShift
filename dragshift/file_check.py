@@ -2,6 +2,7 @@
 import tempfile
 import time
 import zipfile
+import numpy as np
 from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
@@ -63,6 +64,13 @@ def selftest():
             lens.save_project(project,project_path)
             assert lens.load_project(project_path) == project
             assert len(lens.export(project)) == 2
+            from . import lenticular_stream, raster_export
+            with lenticular_stream.prepared(project, folder=base) as (streamed, _):
+                assert np.array_equal(streamed.read_rows(0, 80), np.asarray(interlace))
+                streamed_path = base/'streamed.tif'
+                raster_export.write(streamed, streamed_path, 'TIFF', geometry.dpi)
+                with Image.open(streamed_path) as image:
+                    assert image.size == interlace.size
             animated_video=convert.image_to(gif,'WEBM')[0]
             assert .55<video.probe(animated_video).duration<.65
             emoji=telegram.export_emoji(gif)[0]

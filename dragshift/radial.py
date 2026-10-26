@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from PySide6.QtCore import (QEasingCurve, QObject, QPoint, QPointF, QRectF, QRunnable, Qt,
+from PySide6.QtCore import (QEasingCurve, QObject, QPoint, QPointF, QRect, QRectF, QRunnable, Qt,
                             QThreadPool, QTimer, QVariantAnimation, Signal, Slot)
 from PySide6.QtGui import (QColor, QCursor, QFont, QGuiApplication, QImage, QPainter,
                            QPainterPath, QPen, QPixmap)
@@ -165,6 +165,7 @@ class RadialMenu(QWidget):
         self._t = 0.0
         self._shape()
         self.show()
+        glass.allow_capture(int(self.winId()))
         self.raise_()
         self.anim.start()
         self.frame.start()
@@ -186,16 +187,18 @@ class RadialMenu(QWidget):
 
     def _capture(self, top_left: QPoint, pos: QPoint, paths):
         """Capture before showing, without freezing Explorer's drag image into the lens."""
+        previous = self.backdrop, self._raw_backdrop
         self.backdrop, self._raw_backdrop = None, None
+        rect = QRect(top_left.x(), top_left.y(), SIZE, SIZE)
         try:
             if sys.platform == "darwin":
-                raw = glass.grab_screen(top_left.x(), top_left.y(), SIZE, SIZE)
+                raw = glass.capture_background(self, rect)
                 if raw is not None and paths is None:
                     cx, cy = pos.x() - top_left.x(), pos.y() - top_left.y()
                     raw = glass.inpaint_rects(raw, [(cx - 70, cy - 64, cx + 70, cy + 64)])
             else:
                 with glass.hidden_drag_images() as hidden:
-                    raw = glass.grab_screen(top_left.x(), top_left.y(), SIZE, SIZE)
+                    raw = glass.capture_background(self, rect)
                 if raw is not None:
                     rects = hidden.rects
                     if sys.platform.startswith("linux") and paths is None:
@@ -207,8 +210,10 @@ class RadialMenu(QWidget):
             if raw is not None:
                 self._raw_backdrop = raw
                 self.backdrop = glass.blur_pixmap(QPixmap.fromImage(glass.qimage_from_pil(raw)), 12)
+            else:
+                self.backdrop, self._raw_backdrop = previous
         except Exception:
-            self.backdrop, self._raw_backdrop = None, None
+            self.backdrop, self._raw_backdrop = previous
 
     def _render(self, n: int):
         if n <= 0 or n in self.liquid or self._raw_backdrop is None:

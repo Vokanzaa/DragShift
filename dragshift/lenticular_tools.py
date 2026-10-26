@@ -66,7 +66,7 @@ class LenticularWindow(_AsyncTools):
 
     def __init__(self, paths, notify):
         super().__init__('Lenticular print', paths, notify, (940, 700))
-        self.project = lens.Project()
+        self.project = lens.Project(settings=lens.Settings(auto_quality=True))
         self.frame_map = {}
         self.sizes = {}
         self.current = None
@@ -139,6 +139,8 @@ class LenticularWindow(_AsyncTools):
         self.quality.setRange(1, 100)
         self.quality.setValue(5)
         self.quality.setKeyboardTracking(False)
+        self.auto_quality = QCheckBox(tr('Automatic sampling · about 900 PPI'))
+        self.auto_quality.setChecked(True)
         self.auto_height = QCheckBox(tr('Height from the first image'))
         self.auto_height.setChecked(True)
         self.orientation = QComboBox()
@@ -147,6 +149,7 @@ class LenticularWindow(_AsyncTools):
         for title, widget in [('Print width', self.print_width), ('Print height', self.print_height), ('Lens pitch · LPI', self.lpi),
                               ('Pixels per frame in a lens', self.quality), ('Lens direction', self.orientation)]:
             _field(global_form, title, widget)
+        global_form.addRow(self.auto_quality)
         global_form.addRow(self.auto_height)
         self.columns, self.rows = QSpinBox(), QSpinBox()
         grid = QHBoxLayout()
@@ -227,8 +230,10 @@ class LenticularWindow(_AsyncTools):
         self.fit.currentIndexChanged.connect(self.fit_changed)
         self.align_x.valueChanged.connect(self.fit_changed)
         self.align_y.valueChanged.connect(self.fit_changed)
-        for widget in (self.print_width, self.print_height, self.lpi, self.quality, self.columns, self.rows, self.gap, self.margin):
+        for widget in (self.print_width, self.print_height, self.lpi, self.columns, self.rows, self.gap, self.margin):
             widget.valueChanged.connect(self.parameters_changed)
+        self.quality.valueChanged.connect(self.quality_changed)
+        self.auto_quality.toggled.connect(self.parameters_changed)
         self.auto_height.toggled.connect(self.auto_height_changed)
         self.orientation.currentIndexChanged.connect(self.parameters_changed)
         self.resample_export.toggled.connect(self.parameters_changed)
@@ -414,6 +419,12 @@ class LenticularWindow(_AsyncTools):
         if self.refreshing:
             return
         settings = self.project.settings
+        settings.auto_quality = self.auto_quality.isChecked()
+        if settings.auto_quality:
+            count = max(1, len(self.project.frames))
+            quality = max(1, min(100, round(900/(self.lpi.value()*count))))
+            with QSignalBlocker(self.quality):
+                self.quality.setValue(quality)
         for name, widget in [('width_mm', self.print_width), ('height_mm', self.print_height), ('lpi', self.lpi),
                 ('quality', self.quality), ('columns', self.columns), ('rows', self.rows), ('gap_mm', self.gap), ('margin_mm', self.margin)]:
             if name == 'height_mm' and self.auto_height.isChecked():
@@ -442,12 +453,20 @@ class LenticularWindow(_AsyncTools):
                     width, height, *geometry.sheet, geometry.dpi, len(self.project.frames)))
             except UserError as error:
                 ready = False
+                self.metrics.clear()
                 self.error.setText(tr(str(error)))
         elif not self.invalid_crop:
             self.metrics.setText(tr('Add at least two images. Drag rows to set the frame order.'))
         self.primary_btn.setEnabled(ready)
         self.print_btn.setEnabled(ready and native_print.supported())
         self.timer.start()
+
+    def quality_changed(self, *_):
+        if self.refreshing:
+            return
+        with QSignalBlocker(self.auto_quality):
+            self.auto_quality.setChecked(False)
+        self.parameters_changed()
 
     def auto_height_changed(self):
         if not self.refreshing and not self.auto_height.isChecked():
@@ -507,6 +526,8 @@ class LenticularWindow(_AsyncTools):
                 ('quality', self.quality), ('columns', self.columns), ('rows', self.rows), ('gap_mm', self.gap), ('margin_mm', self.margin)]:
             widget.setValue(getattr(settings, name))
         self.orientation.setCurrentIndex(self.orientation.findData(settings.orientation))
+        with QSignalBlocker(self.auto_quality):
+            self.auto_quality.setChecked(settings.auto_quality)
         self.auto_height.setChecked(settings.auto_height)
         self.resample_export.setChecked(bool(settings.export_dpi))
         self.export_dpi.setValue(settings.export_dpi or 600)
@@ -553,6 +574,15 @@ class LenticularWindow(_AsyncTools):
                 output = unique_path(selected)
             def work():
                 try:
+                    geometry = project.geometry()
+                    size = tuple(round(p/geometry.dpi*dpi) for p, dpi in zip(geometry.sheet, printer.dpi))
+                    if lens.needs_streaming(geometry.sheet) or lens.needs_streaming(size):
+                        from . import lenticular_stream
+                        if any(a > b for a, b in zip(size, printer.printable)):
+                            raise UserError('The image does not fit the printable area. Reduce its size or choose a larger paper size; automatic fitting is disabled.')
+                        with lenticular_stream.prepared(project, dpi=printer.dpi) as (raster, _):
+                            printer.emit(raster, output=output)
+                        return [output] if output else []
                     image, geometry = lens.render(project)
                     raster = lens.printer_raster(image, geometry, printer.dpi)
                     printer.emit(raster, output=output)

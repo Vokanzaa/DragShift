@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from . import print_raster, video
+from . import print_raster, print_stream, video
 from .convert import atomic_save, flatten, open_image
 from .util import UserError, sibling, unique_path
 
@@ -43,6 +43,7 @@ class Settings:
     phase: int = 0
     black_edges: bool = False
     export_dpi: int = 0
+    auto_quality: bool = False
 
 
 @dataclass
@@ -118,8 +119,8 @@ class Project:
         columns, rows = int(settings.columns), int(settings.rows)
         sheet = (tile[0] * columns + gap * (columns - 1) + 2 * margin,
                  tile[1] * rows + gap * (rows - 1) + 2 * margin)
-        print_raster.checked_size(source)
-        print_raster.checked_size(sheet)
+        print_stream.checked_size(source)
+        print_stream.checked_size(sheet)
         return Geometry(source, tile, sheet, gap, margin, settings.lpi * count * quality, aspect)
 
 
@@ -149,8 +150,8 @@ def prepare(frame: Frame, size, *, aspect=None):
     return fit_image(image, frame, size, aspect=aspect)
 
 
-def fit_image(image, frame: Frame, size, *, aspect=None):
-    """Shared source fitting for the full export and a cached screen preview."""
+def fit_layout(image, frame: Frame, size, *, aspect=None):
+    """Crop and placement shared by in-memory and streamed source fitting."""
     image = flatten(image)
     left, top, right, bottom = frame.crop
     x = max(0, min(image.width-1, round(left*image.width)))
@@ -172,17 +173,26 @@ def fit_image(image, frame: Frame, size, *, aspect=None):
     elif frame.fit == 'contain':
         scale = min(width / image.width, height / image.height)
         inner = max(1, round(image.width * scale)), max(1, round(image.height * scale))
-        fitted = print_raster.resize(image, inner)
-        image = Image.new('RGB', size, 'white')
-        image.paste(fitted, (round((width - inner[0]) * frame.align_x), round((height - inner[1]) * frame.align_y)))
-        return image
-    return print_raster.resize(image, size)
+        return image, inner, (round((width-inner[0])*frame.align_x), round((height-inner[1])*frame.align_y))
+    return image, size, (0, 0)
+
+
+def fit_image(image, frame: Frame, size, *, aspect=None):
+    """Shared source fitting for the full export and a cached screen preview."""
+    image, inner, offset = fit_layout(image, frame, size, aspect=aspect)
+    fitted = print_raster.resize(image, inner)
+    if inner == size:
+        return fitted
+    result = Image.new('RGB', size, 'white')
+    result.paste(fitted, offset)
+    return result
 
 
 def render(project: Project):
     """Prepare one source at a time, interleave strips, then impose whole lenses."""
     project.validate()
     geometry = project.geometry()
+    print_raster.checked_size(geometry.sheet)
     settings, count = project.settings, len(project.frames)
     width, height = geometry.tile
     quality = int(settings.quality)
@@ -232,19 +242,30 @@ def printer_raster(image, geometry: Geometry, dpi):
 def export(project: Project, target='TIFF'):
     if target not in ('TIFF', 'PNG', 'BMP'):
         raise UserError('Choose a lossless print format: TIFF, PNG or BMP.')
-    image, geometry = render(project)
+    geometry = project.geometry()
     output_dpi = project.settings.export_dpi or geometry.dpi
-    if project.settings.export_dpi:
-        image = printer_raster(image, geometry, (output_dpi, output_dpi))
+    final_size = tuple(round(p/geometry.dpi*output_dpi) for p in geometry.sheet)
+    print_stream.checked_size(final_size)
+    from . import raster_export
+    raster_export.validate(final_size, target, output_dpi)
     first = Path(project.frames[0].path)
     folder = sibling(first, 'Interlace', '.tif' if target == 'TIFF' else '.' + target.lower()).parent
     with tempfile.TemporaryDirectory(prefix='.~interlace-', dir=folder) as temporary:
         stage = Path(temporary)
         raster = stage / 'image'
-        image.save(raster, target, dpi=(output_dpi, output_dpi))
+        if needs_streaming(geometry.sheet) or needs_streaming(final_size):
+            from . import lenticular_stream, raster_export
+            dpi = (output_dpi, output_dpi) if project.settings.export_dpi else None
+            with lenticular_stream.prepared(project, folder=stage, dpi=dpi) as (rows, _):
+                raster_export.write(rows, raster, target, output_dpi)
+        else:
+            image, _ = render(project)
+            if project.settings.export_dpi:
+                image = printer_raster(image, geometry, (output_dpi, output_dpi))
+            image.save(raster, target, dpi=(output_dpi, output_dpi))
         metadata = {'format': 'dragshift-print-job', 'version': 1, 'dpi': output_dpi,
                     'interlace_ppi': geometry.dpi,
-                    'pixels': list(image.size), 'size_mm': [p*25.4/output_dpi for p in image.size],
+                    'pixels': list(final_size), 'size_mm': [p*25.4/output_dpi for p in final_size],
                     'settings': asdict(project.settings), 'frames': len(project.frames)}
         sidecar = stage / 'settings'
         sidecar.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -273,6 +294,10 @@ def export(project: Project, target='TIFF'):
                     path.unlink(missing_ok=True)
                 raise
     return published
+
+
+def needs_streaming(size):
+    return size[0]*size[1] > 20_000_000 or max(size) > 100_000
 
 
 def save_project(project: Project, path):

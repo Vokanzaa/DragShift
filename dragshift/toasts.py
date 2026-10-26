@@ -149,7 +149,7 @@ class ToastCard(QWidget):
         self.liquid.capture_at(rect)
         self.setWindowOpacity(0.0)
         self.show()
-        self.liquid.excluded = glass.exclude_from_capture(int(self.winId()))
+        glass.allow_capture(int(self.winId()))
         self.fade.start()
 
     def relocate(self, rect: QRect):

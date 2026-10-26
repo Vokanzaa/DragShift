@@ -86,7 +86,7 @@ class GlassWindow(QWidget):
             self.move(scr.center() - self.rect().center())
             self._placed = True
             self.liquid.capture_at(self.frameGeometry())
-        self.liquid.excluded = glass.exclude_from_capture(int(self.winId()))
+        glass.allow_capture(int(self.winId()))
         self._acrylic = IS_WIN and glass.enable_acrylic(int(self.winId()))
         self.update()
 
