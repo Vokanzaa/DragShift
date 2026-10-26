@@ -302,7 +302,7 @@ jobs:
 
       - name: Build the .deb
         run: |
-          PATH=/opt/venv/bin:$PATH packaging/linux/build-deb.sh 1.1.0+files.8
+          PATH=/opt/venv/bin:$PATH packaging/linux/build-deb.sh 1.1.0+files.9
           dpkg-deb --info dist/DragShift-linux-amd64.deb
           desktop-file-validate packaging/linux/dragshift.desktop
 
