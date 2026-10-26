@@ -772,5 +772,18 @@
   "Create transition": "Создать переход",
   "Zoom": "Масштаб",
   "FFglitch motion vectors + keyframe removal · Export: MP4\nMotion-rich footage gives stronger results. B returns cleanly after the transition.\nPreview renders a short 480 px excerpt; open it from the result notification.": "Результат: MP4. Выраженность Melt зависит от движения в исходниках. После перехода восстанавливается B.\nПредпросмотр создаёт короткий ролик до 480 пикс.; откройте его из уведомления.",
-  "&First seconds of B": "Первые секунды &B"
+  "&First seconds of B": "Первые секунды &B",
+  "Saving interlace…": "Сохранение интерлейса…",
+  "Sending print raster…": "Отправка растра в печать…",
+  "The print dimensions exceed the streaming limit (one million pixels per side, 16 billion pixels total).": "Превышен предел размера печати: миллион пикселей по стороне или 16 миллиардов пикселей всего.",
+  "There is not enough free disk space for the prepared print frames.": "На диске недостаточно свободного места для подготовки кадров печати.",
+  "The print raster could not be written: {0}": "Не удалось записать печатный растр: {0}",
+  "One print row is too wide. Reduce the width or resolution.": "Строка растра слишком широкая. Уменьшите ширину или разрешение.",
+  "BMP files cannot exceed 4 GB. Choose TIFF for this print size.": "Размер BMP превышает 4 ГБ. Для этого размера выберите TIFF.",
+  "This raster exceeds the TIFF dimension limit.": "Размер растра превышает предел формата TIFF.",
+  "This raster exceeds the PNG dimension or resolution limit.": "Размер или разрешение растра превышает предел формата PNG.",
+  "This raster exceeds the BMP dimension or resolution limit.": "Размер или разрешение растра превышает предел формата BMP.",
+  "The print renderer returned invalid RGB rows.": "При подготовке печати получены некорректные строки RGB.",
+  "Choose valid print dimensions and resolution.": "Укажите допустимые размеры и разрешение печати.",
+  "Automatic sampling · about 900 PPI": "Автоподбор · около 900 PPI"
 }
