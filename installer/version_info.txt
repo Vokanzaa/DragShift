@@ -5,11 +5,11 @@ VSVersionInfo(
     StringFileInfo([StringTable('040904B0', [
       StringStruct('CompanyName', 'DragShift'),
       StringStruct('FileDescription', 'DragShift — Files, Audio, Video and Datamosh custom build'),
-      StringStruct('FileVersion', '1.1.0+files.8'),
+      StringStruct('FileVersion', '1.1.0+files.9'),
       StringStruct('InternalName', 'DragShift'),
       StringStruct('OriginalFilename', 'DragShift.exe'),
       StringStruct('ProductName', 'DragShift'),
-      StringStruct('ProductVersion', '1.1.0+files.8')])]),
+      StringStruct('ProductVersion', '1.1.0+files.9')])]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])])
   ]
 )
