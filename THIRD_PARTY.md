@@ -85,6 +85,10 @@ The current hosted service's implementation/settings have not been verified.
 
 ## Python dependencies
 
+Large print rasters use tifffile (BSD-3-Clause) for strip-based TIFF/BigTIFF
+containers: https://github.com/cgohlke/tifffile. Deflate strips use Python's
+standard-library zlib; no optional imagecodecs runtime is required.
+
 PySide6 / Qt (LGPLv3), PyMuPDF (AGPLv3), Pillow (HPND), pillow-heif, NumPy,
 python-docx and pywin32 retain their respective upstream licenses. Their versions
 are recorded in requirements-windows-lock.txt. PyInstaller also collects package
