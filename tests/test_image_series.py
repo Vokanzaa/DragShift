@@ -78,14 +78,23 @@ def test_background_series_uses_same_padding_ratio(qt_session,images):
 
 
 def test_annotate_series_maps_same_mark_to_different_sizes(qt_session,images):
+    import numpy as np
     window=tools.AnnotateWindow(images,lambda *args:None)
     window.view.shapes=[tools.Shape('Step','#ffffff',4,[QPointF(80,60)],'1')]
     outs=saved(window,'save')
     assert len(outs)==3
     for path in outs:
         with Image.open(path) as output:
-            color=output.convert('RGB').getpixel((output.width//2+3,output.height//2+3))
-            assert min(color)>150
+            # Test the actual circle's position/size. The numeral's font and
+            # antialiasing differ between native Windows, Linux and Mac fonts.
+            white=np.all(np.asarray(output.convert('RGB'))>240,axis=2)
+            ys,xs=np.where(white)
+            radius=max(10.,4*3.2*min(output.width/160,output.height/120))
+            assert len(xs)>50
+            assert abs((xs.min()+xs.max())/2-output.width/2)<2
+            assert abs((ys.min()+ys.max())/2-output.height/2)<2
+            assert abs((xs.max()-xs.min())/2-radius)<3
+            assert abs((ys.max()-ys.min())/2-radius)<3
 
 
 def test_metadata_series_strips_every_source(qt_session,tmp_path):
