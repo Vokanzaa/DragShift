@@ -10,6 +10,86 @@ from PySide6.QtWidgets import QApplication
 from . import audio, archives, video
 
 
+def _check_distortion_editor(base):
+    """Show the bundled curve/audio editor in both shipped UI languages."""
+    from . import i18n
+    from .distortion_tools import DistortionWindow
+
+    source = base/'distortion-audio.mp4'
+    video.capture([video.executable('ffmpeg'), '-v', 'error', '-f', 'lavfi', '-i',
+        'testsrc2=size=80x60:rate=10:duration=0.6', '-f', 'lavfi', '-i',
+        'sine=frequency=440:duration=0.6', '-c:v', 'libx264', '-c:a', 'aac', '-y', str(source)])
+    previous_language = i18n.language()
+    window = None
+
+    def wait_for(predicate):
+        deadline = time.monotonic()+15
+        while time.monotonic() < deadline:
+            QApplication.processEvents()
+            if predicate():
+                return
+            time.sleep(.01)
+        raise AssertionError(f'Distortion editor did not finish: {window.preview.text()}')
+
+    try:
+        for language in ('en', 'ru'):
+            # Explicitly exercise each catalog even when CI supplies a fixed
+            # DRAGSHIFT_LANGUAGE environment override for the outer smokecheck.
+            i18n.set_language(language)
+            saved = []
+            window = DistortionWindow([source], lambda _, __, outputs: saved.extend(outputs))
+            window.show()
+            wait_for(lambda: window.info is not None and not window._preview_busy and
+                     not window.preview.pixmap().isNull())
+            assert window.curve.isVisible() and not window.static_strength.isVisible()
+            assert window.info.has_audio and window.audio_controls.isEnabled()
+            assert window.curve.points() == [[0., 40.], [1., 40.]]
+            assert window.curve.randomize.text() == i18n.tr('Randomize')
+            assert window.keep_audio.text() == i18n.tr('Keep source audio')
+            if language == 'ru':
+                assert window.curve.randomize.text() != 'Randomize'
+                assert window.keep_audio.text() != 'Keep source audio'
+            window.curve.set_points([[0, 20], [.5, 75], [1, 40]])
+            window.curve.select(1)
+            assert abs(window.at.value()-window.info.duration/2) < .001
+            window.curve.level.setValue(40)
+            assert window.curve.points()[1][1] == 40
+            window.curve.randomize.setChecked(True)
+            assert len(window.curve.points()) >= 8
+            window.curve.select(2)
+            window.curve.level.setValue(73)
+            curve = window.curve.points()
+            assert curve[2][1] == 73
+            window.at.setValue(.1)
+            window.at.setValue(.4)
+            window.curve.randomize.setChecked(False)
+            assert window.curve.points() == curve
+            window.audio_strength_number.setValue(77)
+            assert window.audio_strength.value() == 77
+            window.keep_audio.setChecked(False)
+            assert not window.audio_controls.isEnabled()
+            window.keep_audio.setChecked(True)
+            window.target.setCurrentText('GIF')
+            assert not window.audio_controls.isEnabled()
+            window.target.setCurrentText('MP4')
+            assert window.audio_controls.isEnabled()
+            window.load_frame()
+            wait_for(lambda: not window._preview_busy and not window._callbacks)
+            assert not window.curve.grab().isNull()
+            if language == 'en':
+                window.save()
+                assert window.curve.points() == curve and len(saved) == 1
+                info = video.probe(saved[0])
+                assert info.has_audio and abs(info.duration-window.info.duration) < .02
+            window.close()
+            window = None
+            QApplication.processEvents()
+    finally:
+        if window is not None:
+            window.close()
+        i18n.set_language(previous_language)
+
+
 def selftest():
     from .video_check import selftest as video_selftest
     if video_selftest() != 0:
@@ -81,6 +161,7 @@ def selftest():
             frame=distortion.export(gif,strength=40,target='PNG',at=.3)[0]
             with Image.open(frame) as image:
                 assert image.getpixel((40,30))[:3]==(0,0,255)
+            _check_distortion_editor(base)
             source = base / "archive.zip"
             with zipfile.ZipFile(source, "w") as z:
                 z.writestr("folder/hello.txt", "DragShift test")
