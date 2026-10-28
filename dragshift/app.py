@@ -381,7 +381,7 @@ class DragShiftApp(QObject):
             elif name == "Resize":
                 self.open_window(tools.ResizeWindow(paths, self.notify))
             else:
-                self.open_window(windows[name](paths[0], self.notify))
+                self.open_window(windows[name](paths, self.notify))
         except UserError as e:
             self.toasts.error(f"Couldn't open {name}", str(e))
         except Exception as e:  # noqa: BLE001

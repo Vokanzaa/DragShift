@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (QAbstractSpinBox, QButtonGroup, QCheckBox, QColor
                                QPushButton, QSlider, QSpinBox, QTableWidget, QTableWidgetItem,
                                QVBoxLayout, QWidget)
 
-from . import imaging
+from . import imaging, image_series
 from .util import ui_family
 from .convert import open_image, open_preview
 from .glass import pil_from_qimage, qimage_from_pil
@@ -74,6 +74,7 @@ def dims_text(w: int, h: int) -> str:
 
 class ToolWindow(GlassWindow):
     tool_name = ""
+    image_series = False
 
     def __init__(self, title: str, paths, notify: Notify, size=(820, 680)):
         super().__init__(title, size=size)
@@ -81,7 +82,7 @@ class ToolWindow(GlassWindow):
         self.path = self.paths[0]
         self.notify = notify
         self.submit = None   # set by the app: run work in the background with a spinner
-        self._source_list = isinstance(paths, (list, tuple))
+        self._source_list = isinstance(paths, (list, tuple)) or self.image_series
         self.source_kwargs = {}
         self.replacement_handler = None
         self.setAcceptDrops(True)
@@ -93,6 +94,11 @@ class ToolWindow(GlassWindow):
         self.subtitle = QLabel(tr(sub))
         self.subtitle.setObjectName("dim")
         self.body.addWidget(self.subtitle)
+        if len(self.paths)>1 and self.image_series:
+            hint=QLabel(tr('The same settings apply to every selected image. Preview shows the first. Areas scale to each image.'))
+            hint.setWordWrap(True)
+            hint.setObjectName('dim')
+            self.body.addWidget(hint)
         QShortcut(QKeySequence(Qt.Key_Return), self, activated=self._enter)
         QShortcut(QKeySequence(Qt.Key_Enter), self, activated=self._enter)
         self.primary_btn: QPushButton | None = None
@@ -324,11 +330,13 @@ class CropView(ImageView):
 
 class CropWindow(ToolWindow):
     tool_name = "Crop"
+    image_series = True
     RATIOS = [("Free", None), ("Original", "orig"), ("1:1", 1.0), ("4:3", 4 / 3), ("3:2", 1.5),
               ("16:9", 16 / 9), ("9:16", 9 / 16), ("4:5", 0.8)]
 
     def __init__(self, path, notify):
         super().__init__("Crop Image", path, notify)
+        path=self.path
         pv = open_preview(path, 1400)
         with Image.open(path) as im:
             fw, fh = im.size
@@ -444,8 +452,15 @@ class CropWindow(ToolWindow):
                 h = round(w / r)
         box = (x0, y0, x0 + w, y0 + h)
 
+        paths=list(self.paths)
+        ratio=self.view.ratio
+        def crop(source):
+            size=image_series.oriented_size(source)
+            if rot%180:
+                size=size[::-1]
+            return imaging.crop_image(source,image_series.crop_box(box,(fw,fh),size,ratio),rot)
         def work():
-            return [imaging.crop_image(path, box, rot)]
+            return image_series.apply(paths,crop)
         extra = f"rotated {rot}°" if rot else ""
         self.run(work, "Cropping…", extra)
 
@@ -469,10 +484,12 @@ SOLIDS = ["#ffffff", "#f2f2f7", "#d1d1d6", "#8e8e93", "#1c1c1e", "#000000", "#ff
 
 class AddBgWindow(ToolWindow):
     tool_name = "Add BG"
+    image_series = True
     ASPECTS = ["Auto", "1:1", "4:3", "16:9", "9:16", "4:5"]
 
     def __init__(self, path, notify):
         super().__init__("Add BG", path, notify, size=(880, 780))
+        path=self.path
         self.small = open_preview(path, 760)
         with Image.open(path) as im:
             self.full_w = max(im.size) if im.getexif().get(0x0112, 1) in (5, 6, 7, 8) else im.width
@@ -526,8 +543,8 @@ class AddBgWindow(ToolWindow):
         row, self.asp = toggle_row(self.ASPECTS)
         self.body.addLayout(row)
 
-        self.copy_btn = QPushButton(tr("Copy"))
-        self.copy_btn.setToolTip(tr("Copy the result to the clipboard"))
+        self.copy_btn = QPushButton(tr("Copy preview" if len(self.paths)>1 else "Copy"))
+        self.copy_btn.setToolTip(tr("Copy the first result to the clipboard" if len(self.paths)>1 else "Copy the result to the clipboard"))
         self.copy_btn.clicked.connect(self.copy)
         self.body.addLayout(self.footer("Save with Background", self.save, self.reset, [self.copy_btn]))
 
@@ -595,15 +612,19 @@ class AddBgWindow(ToolWindow):
     def copy(self):
         QGuiApplication.clipboard().setImage(qimage_from_pil(self._compose_full()))
         self.copy_btn.setText(tr("Copied ✓"))
-        QTimer.singleShot(1400, lambda: self.copy_btn.setText(tr("Copy")))
+        QTimer.singleShot(1400, lambda: self.copy_btn.setText(tr("Copy preview" if len(self.paths)>1 else "Copy")))
 
     def save(self):
-        params, path = self._params(self._full_scale()), self.path
+        params, paths = self._params(1), list(self.paths)
 
         def work():
             from .animation import transform_image
-            return [transform_image(path,'With Background',lambda im:imaging.add_background(im,params),
-                                    target='GIF' if path.suffix.lower()=='.gif' else 'PNG')]
+            from dataclasses import replace
+            def compose(im):
+                scaled=replace(params,radius=int(params.radius*max(1.,max(im.size)/1000)))
+                return imaging.add_background(im,scaled)
+            return image_series.apply(paths,lambda path:transform_image(path,'With Background',compose,
+                                    target='GIF' if path.suffix.lower()=='.gif' else 'PNG'))
         self.run(work, "Adding background…")
 
 
@@ -748,15 +769,19 @@ class AnnotateView(ImageView):
 
 class AnnotateWindow(ToolWindow):
     tool_name = "Annotate"
+    image_series = True
     TOOLS = ["Arrow", "Rect", "Ellipse", "Pen", "Highlight", "Text", "Step"]
     COLORS = ["#ff3b30", "#ff9500", "#ffcc00", "#34c759", "#007aff", "#af52de", "#ffffff", "#000000"]
 
     def __init__(self, path, notify):
         super().__init__("Annotate", path, notify, size=(900, 720))
+        path=self.path
         pv = open_preview(path, 1600)
         with Image.open(path) as im:
             full = im.size if im.getexif().get(0x0112, 1) not in (5, 6, 7, 8) else im.size[::-1]
         self.k = full[0] / pv.width
+        self.full_size=full
+        self.preview_size=pv.size
         self.tool, self.color = "Arrow", self.COLORS[0]
         self.view = AnnotateView(qimage_from_pil(pv), self)
         self.body.addWidget(self.view, 1)
@@ -811,7 +836,8 @@ class AnnotateWindow(ToolWindow):
         if not shapes:
             self.close()
             return
-        k, path = self.k, self.path
+        k, paths = self.k, list(self.paths)
+        full_size,preview_size=self.full_size,self.preview_size
         counts: dict[str, int] = {}
         for s in shapes:
             counts[s.kind] = counts.get(s.kind, 0) + 1
@@ -823,14 +849,16 @@ class AnnotateWindow(ToolWindow):
             from .animation import transform_image
             def annotate(frame):
                 img=qimage_from_pil(frame.convert('RGBA'))
+                sx,sy=((k,k) if frame.size==full_size else
+                       (frame.width/preview_size[0],frame.height/preview_size[1]))
                 p=QPainter(img)
                 p.setRenderHint(QPainter.Antialiasing)
                 p.setRenderHint(QPainter.TextAntialiasing)
                 for sh in shapes:
-                    draw_shape(p,sh,lambda q:QPointF(q.x()*k,q.y()*k),k)
+                    draw_shape(p,sh,lambda q:QPointF(q.x()*sx,q.y()*sy),min(sx,sy))
                 p.end()
                 return pil_from_qimage(img)
-            return [transform_image(path,'Annotated',annotate)]
+            return image_series.apply(paths,lambda path:transform_image(path,'Annotated',annotate))
         self.run(work, "Saving annotations…", extra)
 
 
@@ -870,14 +898,17 @@ class RedactView(ImageView):
 
 class RedactWindow(ToolWindow):
     tool_name = "Redact"
+    image_series = True
     MODES = ["Black box", "Pixelate", "Blur"]
 
     def __init__(self, path, notify):
         super().__init__("Redact", path, notify)
+        path=self.path
         self.base = open_preview(path, 1400)
         with Image.open(path) as im:
             full = im.size if im.getexif().get(0x0112, 1) not in (5, 6, 7, 8) else im.size[::-1]
         self.k = full[0] / self.base.width
+        self.full_size=full
         self.view = RedactView(qimage_from_pil(self.base), self)
         self.body.addWidget(self.view, 1)
         self.hint = QLabel(tr("Drag over anything you want hidden. It's burned into the pixels — it can't be undone in the copy."))
@@ -902,7 +933,8 @@ class RedactWindow(ToolWindow):
         im = imaging.redact(self.base, self._boxes(1.0), self._mode())
         self.view.set_image(qimage_from_pil(im))
         n = len(self.view.rects)
-        self.subtitle.setText(tr(f"{self.path.name}  ·  {n} area{'s' if n != 1 else ''} hidden" if n else self.path.name))
+        source=(f'{len(self.paths)} files · {self.path.name}' if len(self.paths)>1 else self.path.name)
+        self.subtitle.setText(tr(f"{source}  ·  {n} area{'s' if n != 1 else ''} hidden" if n else source))
 
     def undo(self):
         if self.view.rects:
@@ -910,7 +942,8 @@ class RedactWindow(ToolWindow):
             self.refresh()
 
     def save(self):
-        boxes, mode, path = self._boxes(self.k), self._mode(), self.path
+        boxes, mode, paths = self._boxes(self.k), self._mode(), list(self.paths)
+        full_size=self.full_size
         if not boxes:
             self.close()
             return
@@ -918,16 +951,21 @@ class RedactWindow(ToolWindow):
 
         def work():
             from .animation import transform_image
-            return [transform_image(path,'Redacted',lambda im:imaging.redact(im,boxes,mode))]
+            def redact(im):
+                regions=[image_series.region(box,full_size,im.size) for box in boxes]
+                return imaging.redact(im,regions,mode)
+            return image_series.apply(paths,lambda path:transform_image(path,'Redacted',redact))
         self.run(work, "Redacting…", f"{len(boxes)} area{'s' if len(boxes) != 1 else ''} {label}")
 
 
 # ================================================================ EDIT
 class EditWindow(ToolWindow):
     tool_name = "Edit"
+    image_series = True
 
     def __init__(self, path, notify):
         super().__init__("Edit", path, notify, size=(880, 780))
+        path=self.path
         self.small = open_preview(path, 900)
         with Image.open(path) as im:
             self.full_size = im.size if im.getexif().get(0x0112, 1) not in (5, 6, 7, 8) else im.size[::-1]
@@ -1059,19 +1097,23 @@ class EditWindow(ToolWindow):
 
     def save(self):
         adj = imaging.Adjust(**vars(self._collect(True)))
-        path = self.path
+        paths = list(self.paths)
 
         def work():
-            return [imaging.edit_image(path, adj)]
+            return image_series.apply(paths,lambda path:imaging.edit_image(path,adj))
         self.run(work, "Applying edits…", self._summary())
 
 
 # ================================================================ METADATA
 class MetadataWindow(ToolWindow):
     tool_name = "Metadata"
+    image_series = True
 
     def __init__(self, path, notify, is_pdf: bool = False):
         super().__init__("Metadata", path, notify, size=(640, 380))
+        path=self.path
+        if is_pdf:
+            self._source_list=False
         self.is_pdf = is_pdf
         self.source_kwargs = {'is_pdf': is_pdf}
         info = imaging.read_pdf_metadata(path) if is_pdf else imaging.read_image_metadata(path)
@@ -1135,21 +1177,24 @@ class MetadataWindow(ToolWindow):
         self.body.addLayout(self.footer("Remove all metadata", self.strip, None, extra))
 
     def strip(self):
-        path, is_pdf = self.path, self.is_pdf
+        paths, is_pdf = list(self.paths), self.is_pdf
         detail = f"removed {self.n_fields} field{'s' if self.n_fields != 1 else ''}" + (" incl. GPS location" if self.has_gps else "")
+        if len(paths)>1:
+            detail=tr(f'Removed metadata from {len(paths)} images')
 
         def work():
-            return [imaging.strip_pdf_metadata(path) if is_pdf else imaging.strip_image_metadata(path)]
+            return image_series.apply(paths,lambda path:imaging.strip_pdf_metadata(path) if is_pdf else imaging.strip_image_metadata(path))
         self.run(work, "Removing metadata…", detail)
 
     def strip_location(self):
-        path = self.path
-        self.run(lambda: [imaging.strip_location(path)], "Removing location…", "GPS removed, camera info kept")
+        paths = list(self.paths)
+        self.run(lambda:image_series.apply(paths,imaging.strip_location), "Removing location…", "GPS removed, camera info kept")
 
 
 # ================================================================ COMPRESS
 class CompressWindow(ToolWindow):
     tool_name = "Compress"
+    image_series = True
     SIDES = [("Original size", None), ("Max 3840 px", 3840), ("Max 2560 px", 2560),
              ("Max 1920 px", 1920), ("Max 1280 px", 1280), ("Max 800 px", 800)]
     TARGETS = [("2 MB", 2_000_000), ("1 MB", 1_000_000), ("500 KB", 500_000), ("200 KB", 200_000), ("100 KB", 100_000)]
@@ -1330,23 +1375,23 @@ class CompressWindow(ToolWindow):
             label = self.TARGETS[self.tgrp.checkedId()][0]
 
             def work():
-                outs = []
-                for p in paths:
+                def compress(p):
                     im = open_image(p)
                     if side and max(im.size) > side:
                         im.thumbnail((side, side), Image.LANCZOS)
                     q, s2 = imaging.plan_target_size(im, target, limit)
-                    outs.append(imaging.compress_to(p, q, min(x for x in (side, s2) if x) if (side or s2) else None, target))
-                return outs
+                    return imaging.compress_to(p, q, min(x for x in (side, s2) if x) if (side or s2) else None, target)
+                return image_series.apply(paths,compress)
             self.run(work, "Compressing…", f"target {label}")
         else:
             q = self.q.value()
-            self.run(lambda: [imaging.compress_to(p, q, side, target) for p in paths], "Compressing…", f"quality {q}")
+            self.run(lambda: image_series.apply(paths,lambda p:imaging.compress_to(p, q, side, target)), "Compressing…", f"quality {q}")
 
 
 # ================================================================ RESIZE
 class ResizeWindow(ToolWindow):
     tool_name = "Resize"
+    image_series = True
     PRESETS = [("25%", "pct", 25), ("50%", "pct", 50), ("75%", "pct", 75), ("3840", "long", 3840),
                ("2560", "long", 2560), ("1920", "long", 1920), ("1280", "long", 1280), ("800", "long", 800)]
 
@@ -1424,7 +1469,7 @@ class ResizeWindow(ToolWindow):
             if mode == "exact":
                 return val
             return imaging.resize_dims(size, mode, val)
-        self.run(lambda: [imaging.resize_image(p, dims_for(p)) for p in paths], "Resizing…")
+        self.run(lambda: image_series.apply(paths,lambda p:imaging.resize_image(p, dims_for(p))), "Resizing…")
 
 
 # ================================================================ PROTECT (PDF)
