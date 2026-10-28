@@ -130,6 +130,36 @@ def _check_image_series(base):
         i18n.set_language(language)
 
 
+def _check_file_drag_guard(base):
+    from PySide6.QtCore import QMimeData, QPoint, Qt, QUrl
+    from PySide6.QtGui import QDragEnterEvent
+    from .file_drag import FileDragGate
+    gate=FileDragGate(lambda:(True,True,False))
+    received=[]
+    gate.ready.connect(lambda pos,paths:received.append(paths))
+    try:
+        gate.request(QPoint(320,240))
+        assert not received
+        text=QMimeData()
+        text.setText('Shift while editing text')
+        event=QDragEnterEvent(QPoint(2,2),Qt.CopyAction,text,Qt.LeftButton,Qt.ShiftModifier)
+        gate.dragEnterEvent(event)
+        QApplication.processEvents()
+        assert not received and not gate.isVisible()
+        source=base/'guard-file.txt'
+        source.write_text('file payload',encoding='utf-8')
+        gate.request(QPoint(320,240))
+        mime=QMimeData()
+        mime.setUrls([QUrl.fromLocalFile(str(source))])
+        event=QDragEnterEvent(QPoint(2,2),Qt.CopyAction|Qt.MoveAction,mime,Qt.LeftButton,Qt.ShiftModifier)
+        gate.dragEnterEvent(event)
+        QApplication.processEvents()
+        assert len(received)==1 and Path(received[0][0])==source
+        assert event.dropAction()==Qt.CopyAction
+    finally:
+        gate.close()
+
+
 def selftest():
     from .video_check import selftest as video_selftest
     if video_selftest() != 0:
@@ -203,6 +233,7 @@ def selftest():
                 assert image.getpixel((40,30))[:3]==(0,0,255)
             _check_distortion_editor(base)
             _check_image_series(base)
+            _check_file_drag_guard(base)
             source = base / "archive.zip"
             with zipfile.ZipFile(source, "w") as z:
                 z.writestr("folder/hello.txt", "DragShift test")

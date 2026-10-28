@@ -18,6 +18,8 @@ NO_DRAG_TIMEOUT = 50  # ticks (≈ 0.75 s) to wait for a file drag to enter befo
 
 
 class DragShiftWatcher(QObject):
+    gesture_started = Signal()
+    gesture_ended = Signal()
     show_menu = Signal(QPoint)
     toggle_ring = Signal()
     hide_menu = Signal()
@@ -37,6 +39,7 @@ class DragShiftWatcher(QObject):
         self._shown_at = QPoint()
         self._selection_tap = False
         self._selection_started = 0.
+        self._left_was = False
         self._user32 = ctypes.windll.user32 if sys.platform == "win32" else None
         self._mac = None
         if sys.platform == "darwin":
@@ -69,6 +72,11 @@ class DragShiftWatcher(QObject):
     def _tick(self):
         lbtn, shift, esc = self._state()
         pos = QCursor.pos()
+        if lbtn and not self._left_was:
+            self.gesture_started.emit()
+        if (not lbtn and self._left_was) or esc or not self.enabled:
+            self.gesture_ended.emit()
+        self._left_was = lbtn
         # A Shift tap with no mouse click is distinct from native Shift+click
         # range selection. Resolve selected Explorer files only after release.
         if self.key_name=='shift' and self.enabled and not self.menu_visible():
