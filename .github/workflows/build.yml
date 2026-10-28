@@ -374,46 +374,83 @@ jobs:
 
   publish:
     needs: [windows, macos, linux]
-    if: always() && github.event_name == 'push' && needs.windows.result == 'success'
+    if: always() && github.event_name == 'push' && needs.windows.result == 'success' && needs.macos.result == 'success' && needs.linux.result == 'success'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Derive release from app version
+        id: release
+        run: |
+          python3 - <<'PY'
+          import ast
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+
+          tree = ast.parse(Path('dragshift/__init__.py').read_text(encoding='utf-8'))
+          values = [node.value for node in tree.body if isinstance(node, ast.Assign)
+                    and any(isinstance(target, ast.Name) and target.id == '__version__' for target in node.targets)]
+          if len(values) != 1:
+              raise SystemExit('Expected one literal application version.')
+          version = ast.literal_eval(values[0])
+          if not isinstance(version, str) or not re.fullmatch(r'\d+\.\d+\.\d+(?:\+[A-Za-z0-9][A-Za-z0-9.-]*)?', version):
+              raise SystemExit('Invalid application release version.')
+          tag = 'v' + version.replace('+', '-', 1)
+          commit = os.environ['GITHUB_SHA']
+          existing = subprocess.run(['git', 'rev-parse', '--verify', '--quiet', f'refs/tags/{tag}^{{commit}}'],
+                                    capture_output=True, text=True)
+          if existing.returncode == 0 and existing.stdout.strip() != commit:
+              raise SystemExit(f'{tag} already belongs to another commit. Bump the application version before publishing.')
+          if existing.returncode not in (0, 1):
+              raise SystemExit('Could not verify the existing release tag; publication stopped.')
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'version={version}\ntag={tag}\nname=DragShift {version}\n')
+          PY
+
       - uses: actions/download-artifact@v4
         with:
           path: out
           merge-multiple: true
 
-      - run: ls -la out
-
-      - name: Publish download (latest)
-        if: github.ref == 'refs/heads/main'
+      - name: Publish complete versioned desktop release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
-          name: DragShift (latest build)
+          tag_name: ${{ steps.release.outputs.tag }}
+          name: ${{ steps.release.outputs.name }}
+          target_commitish: ${{ github.sha }}
+          prerelease: false
           make_latest: true
+          fail_on_unmatched_files: true
           body: |
-            **Windows**
-            - **DragShift-Setup.exe** — recommended. Per-user install (no admin), Start menu, start with Windows, right-click "DragShift…" and Send To.
-            - **DragShift.exe** — portable.
+            ## DragShift ${{ steps.release.outputs.version }}
 
-            **Mac** (macOS 11+). Easiest, with no security warning, is to paste into Terminal:
-            `curl -fsSL https://raw.githubusercontent.com/llamaboi55/DragShift/main/install-mac.sh | bash`
+            Video and audio conversion/editing, classic Melt datamosh with clip sequences,
+            lenticular interlace/projects and Windows direct printing, Telegram emoji export,
+            animated GIF editing, Liquid Rescale distortion and ZIP/7Z archives are included.
+            The Shift-and-drag radial workflow and captured matte glass remain.
 
-            Or download:
-            - **DragShift-mac-apple-silicon.dmg** — M1/M2/M3/M4 Macs.
-            - **DragShift-mac-intel.dmg** — Intel Macs.
-            Open the .dmg and drag DragShift to Applications.
-            **First launch (until DragShift is notarized by Apple):** open DragShift once and click **Done** on the warning, then go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to "DragShift was blocked", and confirm. You only do this once.
-            Or in Terminal: `xattr -dr com.apple.quarantine /Applications/DragShift.app`
+            **Download the packaged application:**
+            - [Windows x64 installer — DragShift-Setup.exe](https://github.com/${{ github.repository }}/releases/download/${{ steps.release.outputs.tag }}/DragShift-Setup.exe) — recommended; per-user installation, Русский / English, Start menu and optional Explorer integration.
+            - [Windows portable — DragShift.exe](https://github.com/${{ github.repository }}/releases/download/${{ steps.release.outputs.tag }}/DragShift.exe).
+            - [Mac Apple Silicon — DragShift-mac-apple-silicon.dmg](https://github.com/${{ github.repository }}/releases/download/${{ steps.release.outputs.tag }}/DragShift-mac-apple-silicon.dmg).
+            - [Intel Mac — DragShift-mac-intel.dmg](https://github.com/${{ github.repository }}/releases/download/${{ steps.release.outputs.tag }}/DragShift-mac-intel.dmg).
+            - [Linux Debian/Ubuntu x64 — DragShift-linux-amd64.deb](https://github.com/${{ github.repository }}/releases/download/${{ steps.release.outputs.tag }}/DragShift-linux-amd64.deb) — tested on Debian 12/XFCE with X11.
 
-            **Linux** (Debian 12+, Ubuntu 23.04+, Mint, MX… on X11 desktops such as XFCE, MATE, Cinnamon):
-            - **DragShift-linux-amd64.deb** — install with `sudo apt install ./DragShift-linux-amd64.deb`, then open DragShift from the app menu. Works with or without a compositor.
+            Packages include the Python/Qt runtime and native media engines (FFmpeg/FFprobe,
+            FFglitch, 7-Zip and ImageMagick/Liquid Rescale); separate engine installation is not required.
+            Mac packages are tested on macOS 15 and ad-hoc signed; Apple notarization is not configured.
 
-            Built automatically from commit ${{ github.sha }}.
-          files: out/*
-
-      - name: Publish tagged release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: out/*
+            **Source code** ZIP/TAR downloads contain source files, not an installed application.
+            For normal use, choose one of the five application packages above.
+            Built and tested automatically from commit ${{ github.sha }} after all native platforms passed.
+          files: |
+            out/DragShift-Setup.exe
+            out/DragShift.exe
+            out/DragShift-mac-apple-silicon.dmg
+            out/DragShift-mac-intel.dmg
+            out/DragShift-linux-amd64.deb
