@@ -80,7 +80,7 @@ def test_video_frames_audio_and_selected_frame(tmp_path,media_engines):
     out=distortion.export(source,strength=65,target='MP4',max_side=160)[0]
     info=video.probe(out)
     assert (info.width,info.height)==(160,120) and info.has_audio
-    assert info.duration==pytest.approx(.6,abs=.06)
+    assert info.duration==pytest.approx(.6,abs=.002)
     assert video.preview_bytes(out,0)!=video.preview_bytes(out,.3)
     frame=distortion.export(source,strength=65,target='PNG',at=.3,max_side=160)[0]
     assert Image.open(frame).size==(160,120)
@@ -134,7 +134,7 @@ def test_high_frame_rate_and_portrait_bound(tmp_path,media_engines):
     data=json.loads(video.capture([video.executable('ffprobe'),'-v','error','-count_frames',
         '-select_streams','v:0','-show_entries','stream=nb_read_frames','-of','json',str(out)]))
     assert int(data['streams'][0]['nb_read_frames'])==18
-    assert video.probe(out).duration==pytest.approx(.3,abs=.02)
+    assert video.probe(out).duration==pytest.approx(.3,abs=.002)
     gif=distortion.export(source,strength=0,target='GIF',max_side=160)[0]
     with Image.open(gif) as animation:
         assert sum(frame.info['duration'] for frame in ImageSequence.Iterator(animation))==300
@@ -155,6 +155,134 @@ def test_gif_selected_frame_webm_alpha_and_clip_timing(tmp_path,media_engines):
     out=distortion.export(source,strength=40,target='WEBM',start=.1,end=.6,max_side=160)[0]
     info=video.probe(out)
     assert info.codec=='vp9' and not info.has_audio
-    assert info.duration==pytest.approx(.5,abs=.11)
+    assert info.duration==pytest.approx(.5,abs=.002)
     frame=distortion.source_frame(out,0,max_side=160)
     assert frame.getchannel('A').getextrema()==(0,255)
+
+
+def test_absolute_curve_interpolates_on_source_time_and_is_validated():
+    from dragshift import distortion
+    curve=[(0,0),(.25,80),(1,20)]
+    assert distortion.strength_at(curve,0,4)==0
+    assert distortion.strength_at(curve,.5,4)==40
+    assert distortion.strength_at(curve,1,4)==80
+    assert distortion.strength_at(curve,2.5,4)==50
+    assert distortion.strength_at(None,2,4,strength=73)==73
+    for invalid in ([],[(0,40)],[(0,-1),(1,40)],[(0,40),(1,96)],
+                    [(0,40),(.5,70),(.5,50),(1,40)],[(.1,40),(1,40)],
+                    [(0,40),(.9,40)],[(0,40),(float('nan'),40),(1,40)]):
+        with pytest.raises(UserError,match='curve'):
+            distortion.validate_curve(invalid)
+
+
+def test_variable_gif_curve_uses_source_frame_times_and_matches_png_preview(tmp_path,monkeypatch):
+    from dragshift import distortion
+    source=tmp_path/'curve.gif'
+    frames=[picture(color) for color in ('red','blue','green')]
+    frames[0].save(source,save_all=True,append_images=frames[1:],duration=[100,200,300],disposal=2)
+    curve=[(0,0),(1,90)]
+    values=[]
+    warp=distortion._warp_frames
+    def record(*args,**kwargs):
+        values.extend(kwargs['strengths'])
+        return warp(*args,**kwargs)
+    monkeypatch.setattr(distortion,'_warp_frames',record)
+    output=distortion.export(source,target='GIF',start=.15,end=.6,max_side=160,curve=curve)[0]
+    assert values==pytest.approx([15,45])
+    with Image.open(output) as image:
+        assert [frame.info['duration'] for frame in ImageSequence.Iterator(image)]==[150,300]
+    png=distortion.export(source,target='PNG',at=.25,max_side=160,curve=curve)[0]
+    preview=distortion.preview_bytes(source,at=.25,max_side=160,curve=curve)
+    with Image.open(png) as saved,Image.open(io.BytesIO(preview)) as shown:
+        expected=distortion.distort_frame(distortion.source_frame(source,.1,160),strength=15,max_side=160)
+        assert saved.convert('RGBA').tobytes()==shown.convert('RGBA').tobytes()==expected.tobytes()
+
+
+def test_video_curve_uses_source_time_after_trim_and_png_is_exact(tmp_path,media_engines,monkeypatch):
+    from dragshift import distortion
+    source=tmp_path/'curve.mp4'
+    video.capture([video.executable('ffmpeg'),'-v','error','-f','lavfi','-i',
+        'testsrc2=size=160x120:rate=10:duration=1','-c:v','libx264','-y',str(source)])
+    curve=[(0,0),(1,90)]
+    strengths=[]
+    warp=distortion._warp_frames
+    def record(*args,**kwargs):
+        strengths.extend(kwargs['strengths'])
+        return warp(*args,**kwargs)
+    monkeypatch.setattr(distortion,'_warp_frames',record)
+    out=distortion.export(source,target='MP4',start=.2,end=.8,max_side=160,curve=curve)[0]
+    assert strengths==pytest.approx([18,27,36,45,54,63])
+    assert video.probe(out).duration==pytest.approx(.6,abs=.002)
+    png=distortion.export(source,target='PNG',at=.4,max_side=160,curve=curve)[0]
+    with Image.open(png) as saved,Image.open(io.BytesIO(distortion.preview_bytes(source,.4,max_side=160,curve=curve))) as shown:
+        assert saved.convert('RGBA').tobytes()==shown.convert('RGBA').tobytes()
+
+
+def test_off_grid_preview_and_trim_sample_actual_cfr_source_frames(tmp_path,media_engines,monkeypatch):
+    from dragshift import distortion
+    source=tmp_path/'offgrid.mp4'
+    video.capture([video.executable('ffmpeg'),'-v','error','-f','lavfi','-i',
+        'testsrc2=size=160x120:rate=10:duration=1','-c:v','libx264','-y',str(source)])
+    info=distortion.probe(source)
+    assert distortion.source_timestamp(info,.35)==pytest.approx(.3)
+    curve=[(0,0),(1,90)]
+    shown=Image.open(io.BytesIO(distortion.preview_bytes(source,.35,max_side=160,curve=curve))).convert('RGBA')
+    expected=distortion.distort_frame(distortion.source_frame(source,.3,160),strength=27,max_side=160)
+    assert shown.tobytes()==expected.tobytes()
+    warp=distortion._warp_frames
+    observed=[]
+    def inspect(frames,*args,**kwargs):
+        for index,path in enumerate(frames):
+            with Image.open(path) as decoded:
+                original=distortion.source_frame(source,.3+index/10,160)
+                assert decoded.convert('RGBA').tobytes()==original.tobytes()
+        observed.extend(kwargs['strengths'])
+        return warp(frames,*args,**kwargs)
+    monkeypatch.setattr(distortion,'_warp_frames',inspect)
+    output=distortion.export(source,target='MP4',start=.25,end=.85,max_side=160,curve=curve)[0]
+    assert observed==pytest.approx([27,36,45,54,63,72])
+    assert video.probe(output).duration==pytest.approx(.6,abs=.002)
+
+
+def test_ntsc_source_timestamp_keeps_exact_frame_boundaries():
+    from dragshift import distortion
+    rate=30000/1001
+    info=distortion.MediaInfo(160,120,40.,rate,True,False)
+    for index in (1,3,299,1198):
+        at=index/rate
+        assert distortion.source_timestamp(info,at)==pytest.approx(at,abs=1e-10)
+        assert distortion.source_timestamp(info,at+.0005)==pytest.approx(at,abs=1e-10)
+
+
+def test_odd_video_canvas_matches_preview_png_and_movie_source_frames(tmp_path,media_engines,monkeypatch):
+    from dragshift import distortion
+    source=tmp_path/'odd.mkv'
+    video.capture([video.executable('ffmpeg'),'-v','error','-f','lavfi','-i',
+        'testsrc=size=161x123:rate=10:duration=0.4','-c:v','ffv1','-pix_fmt','bgr0','-y',str(source)])
+    expected=distortion.source_frame(source,.2,160)
+    assert expected.size==(160,122)
+    warp=distortion._warp_frames
+    def inspect(frames,*args,**kwargs):
+        with Image.open(frames[2]) as image:
+            assert image.convert('RGBA').tobytes()==expected.tobytes()
+        return warp(frames,*args,**kwargs)
+    monkeypatch.setattr(distortion,'_warp_frames',inspect)
+    distortion.export(source,target='MP4',strength=0,max_side=160)
+    png=distortion.export(source,target='PNG',at=.25,strength=0,max_side=160)[0]
+    with Image.open(png) as image:
+        assert image.convert('RGBA').tobytes()==expected.tobytes()
+
+
+def test_real_ntsc_preview_seek_keeps_the_selected_source_frame(tmp_path,media_engines):
+    from dragshift import distortion
+    source=tmp_path/'ntsc.mp4'
+    video.capture([video.executable('ffmpeg'),'-v','error','-f','lavfi','-i',
+        'testsrc2=size=160x120:rate=30000/1001:duration=1','-c:v','libx264','-y',str(source)])
+    info=distortion.probe(source)
+    for index in (1,3,10,20):
+        reference=video.capture([video.executable('ffmpeg'),'-v','error','-i',str(source),
+            '-vf',f'select=eq(n\\,{index}),format=rgba','-frames:v','1','-threads','1',
+            '-f','image2pipe','-c:v','png','pipe:1'])
+        with Image.open(io.BytesIO(reference)) as exact:
+            actual=distortion.source_frame(source,index/info.fps,160,info=info)
+            assert actual.tobytes()==exact.convert('RGBA').tobytes(),index
