@@ -1,12 +1,12 @@
 # DragShift — local file tools
 
-## Custom build 1.1.0+files.11
+## Custom build 1.1.0+files.12
 
 **Install:** [Windows installer](https://github.com/Vokanzaa/DragShift/releases/latest/download/DragShift-Setup.exe) · [all desktop packages and release version](https://github.com/Vokanzaa/DragShift/releases/latest).
 
 **Source:** [main branch](https://github.com/Vokanzaa/DragShift/tree/main) · [source ZIP](https://github.com/Vokanzaa/DragShift/archive/refs/heads/main.zip). Source downloads contain code; choose a packaged application above to install and use it. While a new release is building, main can be newer than the published package. The release page identifies the packaged version.
 
-New in files.11: shared image settings now process the entire selected series for crop, Edit, backgrounds, annotations, redaction and metadata removal. Resize and compression also use transactional batch completion. **536 local source tests passed.** Releases are published only after the complete native desktop build matrix succeeds.
+New in files.12: only real file drags can reveal the radial menu; plain Shift, text drags and drawing gestures stay in the active app. New in files.11: shared image settings now process the entire selected series for crop, Edit, backgrounds, annotations, redaction and metadata removal. Resize and compression also use transactional batch completion. **553 local source tests passed.** Releases are published only after the complete native desktop build matrix succeeds.
 
 Files.10 added direct distortion keyframes with absolute strength, editable random variations, independent audio distortion, clearer preview/export ranges and faster default-size frame processing. Its local source suite passed **517 tests**.
 
@@ -26,7 +26,7 @@ Launch DragShift once; it stays in the system tray. There is no standalone file 
 
 Choose a format in **Convert**, or an operation in **Tools**. Editors open only after choosing a tool. Several files of the same type can be dragged together. The tray icon opens its control menu, with **Settings…**, **How to use** and **Quit DragShift**. The per-user installer can add Explorer's **DragShift…** and **Send to → DragShift** entries, which also use the radial menu. Ctrl or Alt can replace Shift in Settings.
 
-For nonadjacent files in a Windows Explorer folder, select them with Ctrl, release Ctrl, then **tap and release Shift without clicking**. A click radial menu opens for that exact selection. Holding Shift while clicking a file retains Explorer's normal range-selection behavior. The tap shortcut requires at least two items in an Explorer folder and a Shift trigger; it does not read desktop selection and refuses ambiguous tabbed views. Normal file dragging works on every supported platform and uses the final dropped file list.
+For nonadjacent files in a Windows Explorer folder, select them with Ctrl, release Ctrl, then **tap and release Shift without clicking**. A click radial menu opens for that exact selection. Holding Shift while clicking a file retains Explorer's normal range-selection behavior. The tap shortcut requires at least two items in an Explorer folder and a Shift trigger; it does not read desktop selection and refuses ambiguous tabbed views. Normal file dragging works on every supported platform and uses the final dropped file list. The global modifier/mouse gesture is validated against a native local-file drag before showing the ring. Plain Shift, typing, drawing, text selection and web-link drags do not reveal tools. The drag probe does not take keyboard focus or grab the mouse. macOS retains the stationary Finder handoff only when its file-drag pasteboard changed during the current mouse gesture; old clipboard/drag data and inactive Explorer selections cannot open tools.
 
 ## Supported workflows
 
