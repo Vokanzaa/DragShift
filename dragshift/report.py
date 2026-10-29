@@ -75,6 +75,8 @@ def summarize(action: str, srcs: list, outs: list, extra: str = "") -> Result:
 
     if action == 'tool:Interlace':
         return Result('Interlace ready', f'{o0.name} · {_dim_str(dims(o0))} · {human_size(after)}', outs, srcs)
+    if action=='tool:GIF animation':
+        return Result('GIF animation created',f'{o0.name} · {_dim_str(dims(o0))} · {human_size(after)}'+(f' · {extra}' if extra else ''),outs,srcs)
 
     if action == "tool:Pack":
         return Result("Archive created", f"{o0.name} · {human_size(after)}", outs, srcs)

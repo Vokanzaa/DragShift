@@ -130,6 +130,56 @@ def _check_image_series(base):
         i18n.set_language(language)
 
 
+def _check_gif_sequence(base):
+    """Exercise the actual bundled ordering window and its one-file encoder."""
+    from PIL import Image
+    from . import i18n
+    from .gif_sequence_tools import GifSequenceWindow
+    paths=[]
+    for number,color in ((1,'red'),(2,'green'),(10,'blue')):
+        path=base/f'animation_{number}.png'
+        Image.new('RGB',(60,40),color).save(path)
+        paths.append(path)
+    original=[path.read_bytes() for path in paths]
+    language=i18n.language()
+    window=None
+    try:
+        for selected_language in ('en','ru'):
+            i18n.set_language(selected_language)
+            outputs=[]
+            window=GifSequenceWindow(list(reversed(paths)),lambda _,__,out,*extra:outputs.extend(out))
+            window.show()
+            deadline=time.monotonic()+15
+            while time.monotonic()<deadline:
+                QApplication.processEvents()
+                if window.primary_btn.isEnabled() and not window._callbacks:break
+                time.sleep(.01)
+            assert window.primary_btn.isEnabled() and not window.grab().isNull()
+            assert window.sequence.paths()==paths
+            assert window.primary_btn.text()==i18n.tr('Create GIF animation')
+            assert window.order.itemText(0)==i18n.tr('Name · numeric order (1, 2, 10)')
+            window.fps.setValue(25)
+            window.reverse()
+            assert window.order.currentData()=='manual'
+            assert window.sequence.paths()==list(reversed(paths))
+            window.save()
+            assert len(outputs)==1
+            with Image.open(outputs[0]) as animation:
+                assert animation.n_frames==3 and animation.info['loop']==0
+                for index,path in enumerate(reversed(paths)):
+                    animation.seek(index)
+                    assert animation.info['duration']==40
+                    with Image.open(path) as source:
+                        assert animation.convert('RGB').tobytes()==source.tobytes()
+            window.close()
+            window=None
+            QApplication.processEvents()
+        assert [path.read_bytes() for path in paths]==original
+    finally:
+        if window is not None:window.close()
+        i18n.set_language(language)
+
+
 def _check_file_drag_guard(base):
     from PySide6.QtCore import QMimeData, QPoint, Qt, QUrl
     from PySide6.QtGui import QDragEnterEvent
@@ -233,6 +283,7 @@ def selftest():
                 assert image.getpixel((40,30))[:3]==(0,0,255)
             _check_distortion_editor(base)
             _check_image_series(base)
+            _check_gif_sequence(base)
             _check_file_drag_guard(base)
             source = base / "archive.zip"
             with zipfile.ZipFile(source, "w") as z:
