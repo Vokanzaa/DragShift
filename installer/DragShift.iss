@@ -1,7 +1,7 @@
 ; Inno Setup script — per-user install, no admin rights needed.
 #define AppVersion GetEnv("DS_VERSION")
 #if AppVersion == ""
-  #define AppVersion "1.1.0+files.12"
+  #define AppVersion "1.1.0+files.13"
 #endif
 #define AppCompression GetEnv("DS_COMPRESSION")
 #if AppCompression == ""
