@@ -1,12 +1,12 @@
 # DragShift — local file tools
 
-## Custom build 1.1.0+files.12
+## Custom build 1.1.0+files.13
 
 **Install:** [Windows installer](https://github.com/Vokanzaa/DragShift/releases/latest/download/DragShift-Setup.exe) · [all desktop packages and release version](https://github.com/Vokanzaa/DragShift/releases/latest).
 
 **Source:** [main branch](https://github.com/Vokanzaa/DragShift/tree/main) · [source ZIP](https://github.com/Vokanzaa/DragShift/archive/refs/heads/main.zip). Source downloads contain code; choose a packaged application above to install and use it. While a new release is building, main can be newer than the published package. The release page identifies the packaged version.
 
-New in files.12: only real file drags can reveal the radial menu; plain Shift, text drags and drawing gestures stay in the active app. New in files.11: shared image settings now process the entire selected series for crop, Edit, backgrounds, annotations, redaction and metadata removal. Resize and compression also use transactional batch completion. **553 local source tests passed.** Releases are published only after the complete native desktop build matrix succeeds.
+New in files.13: selecting several images and choosing GIF opens one animation builder, with natural numeric filename order, modification date oldest first, original addition order, manual reordering, reverse, 1–100 fps and optional looping. It writes one animated GIF containing every selected frame. Files.12 validates the global mouse gesture against a real file drag; plain Shift, typing, text drags and drawing stay in the active app. The explicit multi-file Explorer selection shortcut remains available. Files.11 added shared settings across the complete selected image series. Releases are published only after the complete native desktop build matrix succeeds.
 
 Files.10 added direct distortion keyframes with absolute strength, editable random variations, independent audio distortion, clearer preview/export ranges and faster default-size frame processing. Its local source suite passed **517 tests**.
 
@@ -41,6 +41,17 @@ For nonadjacent files in a Windows Explorer folder, select them with Ctrl, relea
 | Text: TXT, MD, CSV, LOG, JSON, XML, HTML/HTM | PDF, DOCX | Plain-text conversion |
 
 Available decoders and encoders determine whether a particular file is readable. Unsupported extensions have no conversion actions in the radial menu. This is not a general Office, spreadsheet, slide, OCR or 3D converter. Text formats are imported as text, without evaluating HTML, Markdown or spreadsheet formulas. Animated GIF editing preserves composited frames, frame durations, transparency and loop metadata. Converting an animated GIF to PNG, JPG, WebP, HEIC, TIFF, AVIF, BMP or ICO extracts every composited frame into a new uniquely named folder beside the original GIF (`name Frames/frame-000001.ext`, etc.). This destination follows the GIF even if ordinary exports use a subfolder. GIF editing itself retains the animated GIF. GIF also offers MP4 and WebM conversion with its original animation, without a generated camera effect.
+
+### Assemble image frames into one GIF
+
+Select several images, invoke the radial menu and choose **Convert → GIF**. Check the numbered frame list, set **Frames per second** (10 by default) and click **Create GIF animation**. One new `first-frame Animation.gif` is saved, using a unique name if needed; source files remain intact.
+
+- **Name · numeric order** sorts all numeric parts naturally: `render_1`, `render_2`, `render_10`. Equal names have deterministic path tie-breakers.
+- **Date modified · oldest first** uses the file modification timestamp, then natural names for ties.
+- **Original addition order** restores the order in which files were received. **Manual order**, list dragging, up/down buttons and **Reverse frame order** let you choose the exact sequence. Manual edits are not automatically re-sorted when adding files.
+- Drop additional images onto the open builder. The visible numbered list is the export order. Missing or repeated frame numbers produce a notice; no frames are silently inserted, removed or deduplicated. Consecutive identical frames are retained.
+
+Different dimensions fit inside the first correctly oriented frame without cropping or stretching. Animated image inputs contribute all their composited frames at the chosen frame rate. The encoder processes frames sequentially instead of holding the entire animation in memory. GIF timing uses cumulative centisecond rounding, including at 30 fps. Failure or cancellation leaves no partial new animation. Single-image conversion and extracting frames from a GIF keep their existing behavior.
 
 GIF-to-video conversion chooses a frame grid compatible with its centisecond delays (at least 30 fps, up to 100 fps) instead of dropping very short source frames. Telegram's separate profile is capped at 30 fps by its specification, so faster animations necessarily lose temporal detail there.
 
