@@ -152,6 +152,7 @@ class DragShiftApp(QObject):
         self.settings.apply()
         self.pool = QThreadPool.globalInstance()
         self.windows: list[QWidget] = []
+        self._pending_jobs = 0
         qapp.aboutToQuit.connect(self._cancel_processing)
         self.toasts = ToastStack()
         self.menu = RadialMenu(self.build_rings, self.describe)
@@ -197,6 +198,7 @@ class DragShiftApp(QObject):
         m.addAction(tr(self.act_enabled))
         m.addSeparator()
         m.addAction(tr("Settings…"), self.open_settings)
+        self.update_action=m.addAction(tr('Check for updates…'),self.open_updates)
         m.addAction(tr("How to use"), self.show_welcome)
         m.addSeparator()
         m.addAction(tr(f"Quit {APP_NAME}"), self.qapp.quit)
@@ -204,6 +206,11 @@ class DragShiftApp(QObject):
         self.tray.setContextMenu(m)
         self.tray.activated.connect(self._tray_click)
         self.tray.show()
+        from .update_tools import UpdateController
+        self.updater=UpdateController(self.settings,self.update_busy,self.open_window,self.qapp.quit,self,
+                                      notifier=self.notify_update)
+        self.tray.messageClicked.connect(self.open_updates)
+        qapp.aboutToQuit.connect(self.updater.stop)
 
     def trigger_label(self) -> str:
         return dict(TRIGGERS).get(self.settings.get("trigger"), "Shift")
@@ -430,6 +437,7 @@ class DragShiftApp(QObject):
             window.start(self.pool)
             return
         state = {"card": None, "finished": False}
+        self._pending_jobs += 1
         names = Path(srcs[0]).name if len(srcs) == 1 else f"{len(srcs)} files"
 
         def show_spinner():
@@ -441,12 +449,14 @@ class DragShiftApp(QObject):
         job = Job(action, srcs, fn, extra)
 
         def done(r):
+            self._pending_jobs -= 1
             release(job)
             state["finished"] = True
             card = state["card"] or self.toasts.new()
             card.done(r)
 
         def failed(msg):
+            self._pending_jobs -= 1
             release(job)
             state["finished"] = True
             card = state["card"] or self.toasts.new()
@@ -470,6 +480,7 @@ class DragShiftApp(QObject):
 
     def startup(self, files, *, quiet=False):
         """Stay in the tray until a file is dragged or explicitly handed over."""
+        self.updater.start()
         if files:
             QTimer.singleShot(120, lambda: self.queue_files(files))
         elif not quiet:
@@ -484,11 +495,25 @@ class DragShiftApp(QObject):
     def open_settings(self):
         w = SettingsWindow(self.settings)
         w.changed.connect(self._settings_changed)
+        w.check_updates_requested.connect(self.open_updates)
         self.open_window(w)
 
     def _settings_changed(self):
         self.watcher.set_key(self.settings.get("trigger"))
         self.tray.setToolTip(tr(f"{APP_NAME} — press {self.trigger_label()} while dragging a file"))
+
+    def update_busy(self):
+        return self._pending_jobs>0 or bool(self._pending) or self.menu.isVisible() or any(
+            w.isVisible() and (isinstance(w,tools.ToolWindow) or getattr(w,'busy',False)) for w in self.windows)
+
+    def open_updates(self):
+        self.updater.open()
+
+    def notify_update(self,info):
+        self.update_action.setText(tr(f'Update available: {info.version}'))
+        title=tr('DragShift update available')
+        detail=tr(f'Version {info.version}. Click to see changes and update.')
+        self.tray.showMessage(title,detail,QSystemTrayIcon.Information,10000)
 
     def show_welcome(self):
         self.open_window(WelcomeWindow(self.settings, self.trigger_label()))
