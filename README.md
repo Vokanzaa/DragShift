@@ -1,10 +1,12 @@
 # DragShift — local file tools
 
-## Custom build 1.1.0+files.13
+## Custom build 1.1.0+files.14
 
 **Install:** [Windows installer](https://github.com/Vokanzaa/DragShift/releases/latest/download/DragShift-Setup.exe) · [all desktop packages and release version](https://github.com/Vokanzaa/DragShift/releases/latest).
 
 **Source:** [main branch](https://github.com/Vokanzaa/DragShift/tree/main) · [source ZIP](https://github.com/Vokanzaa/DragShift/archive/refs/heads/main.zip). Source downloads contain code; choose a packaged application above to install and use it. While a new release is building, main can be newer than the published package. The release page identifies the packaged version.
+
+New in files.14: background update notifications, release history, cancellable verified downloads and native installation from this fork. Installed Windows builds update and restart through the existing installer, preserving preferences and actual integration tasks.
 
 New in files.13: selecting several images and choosing GIF opens one animation builder, with natural numeric filename order, modification date oldest first, original addition order, manual reordering, reverse, 1–100 fps and optional looping. It writes one animated GIF containing every selected frame. Files.12 validates the global mouse gesture against a real file drag; plain Shift, typing, text drags and drawing stay in the active app. The explicit multi-file Explorer selection shortcut remains available. Files.11 added shared settings across the complete selected image series. Releases are published only after the complete native desktop build matrix succeeds.
 
@@ -27,6 +29,26 @@ Launch DragShift once; it stays in the system tray. There is no standalone file 
 Choose a format in **Convert**, or an operation in **Tools**. Editors open only after choosing a tool. Several files of the same type can be dragged together. The tray icon opens its control menu, with **Settings…**, **How to use** and **Quit DragShift**. The per-user installer can add Explorer's **DragShift…** and **Send to → DragShift** entries, which also use the radial menu. Ctrl or Alt can replace Shift in Settings.
 
 For nonadjacent files in a Windows Explorer folder, select them with Ctrl, release Ctrl, then **tap and release Shift without clicking**. A click radial menu opens for that exact selection. Holding Shift while clicking a file retains Explorer's normal range-selection behavior. The tap shortcut requires at least two items in an Explorer folder and a Shift trigger; it does not read desktop selection and refuses ambiguous tabbed views. Normal file dragging works on every supported platform and uses the final dropped file list. The global modifier/mouse gesture is validated against a native local-file drag before showing the ring. Plain Shift, typing, drawing, text selection and web-link drags do not reveal tools. The drag probe does not take keyboard focus or grab the mouse. macOS retains the stationary Finder handoff only when its file-drag pasteboard changed during the current mouse gesture; old clipboard/drag data and inactive Explorer selections cannot open tools.
+
+## Application updates
+
+Use **Check for updates…** in the tray or Settings. **Automatically check for updates** is enabled by default and can be disabled. A quiet check is scheduled 30 seconds after startup and then at six-hour intervals, respecting the last check saved across restarts. Up-to-date and failed background checks show no window. A newer complete stable release produces a system notification without taking focus; the tray action also shows its version. Click it to read the changes and update.
+
+**Later** postpones reminders for 24 hours. **Skip this version** suppresses that version; manual checks still find it. Available notes from releases newer than the installed version are collected, newest first; when history cannot be fetched or exceeds the limit, the window links to the full history on GitHub.
+
+The updater uses only `Vokanzaa/DragShift` versioned GitHub Releases, requires all five desktop packages to be uploaded, selects the current platform/architecture, and checks the asset's size and SHA-256 before handoff. HTTPS certificate verification remains enabled. Downloads happen only after the user's action and can be canceled; partial or invalid files never launch. Installation waits until tool windows are closed and file jobs have finished.
+
+The update cache retains the two most recent packages and removes stale partial downloads. Files outside the updater's own naming scheme are left alone.
+
+- **Installed Windows:** Update and restart downloads the installer, verifies it and starts a per-user update with a progress window. It preserves the installation folder, language, preferences and actual autostart/Explorer/desktop-shortcut choices, then restarts DragShift quietly. No reboot is requested.
+- **Portable Windows:** downloads the standalone EXE and shows its folder; DragShift closes so the old EXE can be replaced. A local Python/source launch downloads and opens the normal installer.
+- **macOS/Linux:** downloads the appropriate DMG/DEB and opens the native installation route. Finish installation there and start DragShift again; system authorization remains with the OS. Linux ARM packages are not advertised when unavailable.
+
+Users on files.13 or earlier install files.14 once in the usual way because older builds do not have an updater.
+
+### Publishing future updates
+
+Source commits alone are not installable updates. Bump the application version in `dragshift/__init__.py`, the installer fallback and Windows version resource; update `RELEASE_NOTES.md` with a matching first heading and actual changes. Push the reviewed source to `main`. After all four native builds and tests pass, the workflow publishes the matching versioned release, download links, repository notes and generated GitHub changes. It refuses mismatched notes or reusing an existing version tag for another commit. Clients then offer that release. Do not overwrite old release assets to distribute different code under the same version.
 
 ## Supported workflows
 

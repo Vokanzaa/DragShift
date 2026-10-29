@@ -2,7 +2,7 @@
 import os
 import sys
 from pathlib import Path
-from PyInstaller.utils.hooks import collect_all
+from PyInstaller.utils.hooks import collect_all, copy_metadata
 from PySide6.QtCore import QLibraryInfo
 
 onefile = os.environ.get("ONEFILE") == "1"
@@ -21,7 +21,7 @@ for p in Path("bin").glob("*"):
 qt_russian=Path(QLibraryInfo.path(QLibraryInfo.TranslationsPath))/'qtbase_ru.qm'
 if not qt_russian.is_file():
     raise RuntimeError('Qt Russian translation is required for this bilingual build.')
-language_datas=[(str(qt_russian),'dragshift/assets')]
+language_datas=[(str(qt_russian),'dragshift/assets')]+copy_metadata('certifi')
 
 a = Analysis(
     ["run.py"],

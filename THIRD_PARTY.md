@@ -85,6 +85,11 @@ The current hosted service's implementation/settings have not been verified.
 
 ## Python dependencies
 
+The HTTPS updater uses certifi's Mozilla root certificate bundle (MPL-2.0):
+https://github.com/certifi/python-certifi. Its certificate data and distribution
+metadata/license are included in the frozen package. System certificate
+verification remains enabled.
+
 Large print rasters use tifffile (BSD-3-Clause) for strip-based TIFF/BigTIFF
 containers: https://github.com/cgohlke/tifffile. Deflate strips use Python's
 standard-library zlib; no optional imagecodecs runtime is required.
