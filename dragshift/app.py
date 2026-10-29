@@ -273,10 +273,15 @@ class DragShiftApp(QObject):
         ext = Path(paths[0]).suffix
         same = [p for p in paths if category(p) == cat]
         convert_items = []
-        for t in convert.targets_for(cat, ext):
+        targets=convert.targets_for(cat, ext)
+        if cat=='image' and len(same)>1 and 'GIF' not in targets:
+            targets.append('GIF')
+        for t in targets:
             hint = FORMAT_HINTS.get(t, "")
             if cat == "image" and t == "PDF" and len(same) > 1:
                 hint = f"{len(same)} images → 1 PDF"
+            elif cat=='image' and t=='GIF' and len(same)>1:
+                hint=f'{len(same)} images → 1 animated GIF'
             convert_items.append(Item(t, key=f"convert:{t}", hint=hint))
         rings: dict[str, list[Item]] = {"Convert": convert_items}
         if cat == 'video' or cat == 'image' and ext.lower() == '.gif':
@@ -324,7 +329,10 @@ class DragShiftApp(QObject):
             self.open_window(TelegramEmojiWindow(paths, self.notify))
             return
         if kind == "convert":
-            if cat in ("video", "audio", "archive"):
+            if cat=='image' and name=='GIF' and len(paths)>1:
+                from .gif_sequence_tools import GifSequenceWindow
+                self.open_window(GifSequenceWindow(paths,self.notify))
+            elif cat in ("video", "audio", "archive"):
                 self.submit(f"convert:{name}", paths,
                             lambda: video.batch(paths, lambda p: convert.convert(p, cat, name)), f"Converting to {name}…")
             elif cat == "image" and name == "PDF" and len(paths) > 1:
@@ -414,7 +422,7 @@ class DragShiftApp(QObject):
 
     def submit(self, action: str, srcs: list, fn, working: str = "Working…", extra: str = ""):
         """Run in the background. A spinner card appears only if it takes > 150 ms."""
-        if action in ("tool:Pack", "tool:Telegram emoji", "tool:Distort", "tool:Interlace", "tool:Print interlace") or any(category(p) in ("video", "audio", "archive")
+        if action in ("tool:Pack", "tool:Telegram emoji", "tool:Distort", "tool:Interlace", "tool:Print interlace", "tool:GIF animation") or any(category(p) in ("video", "audio", "archive")
                 or str(p).lower().endswith('.gif') for p in srcs):
             from .video_tools import VideoProgressWindow
             window = VideoProgressWindow(action, srcs, fn, lambda r: self.toasts.new().done(r), extra)
