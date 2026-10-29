@@ -40,3 +40,25 @@ def test_selection_reader_does_not_fill_gaps_or_select_neighbors(tmp_path):
     items=[SimpleNamespace(Path=str(paths[n]),IsFileSystem=True) for n in (0,2)]
     view=SimpleNamespace(Document=SimpleNamespace(SelectedItems=lambda:items))
     assert selected_paths(view)==[str(paths[0]),str(paths[2])]
+
+
+def test_inactive_explorer_selection_never_opens_over_another_app(qt_session,monkeypatch):
+    from dragshift import selection
+    shortcut=selection.SelectionShortcut()
+    events=[]
+    shortcut.ready.connect(events.append)
+    monkeypatch.setattr(selection,'foreground_explorer',lambda:0)
+    shortcut.request()
+    assert not shortcut.busy and not events
+    shortcut._done(123,['selected-a.png','selected-b.png'])
+    assert not events
+
+
+def test_empty_active_explorer_selection_does_not_open_tools(qt_session,monkeypatch):
+    from dragshift import selection
+    shortcut=selection.SelectionShortcut()
+    events=[]
+    shortcut.ready.connect(events.append)
+    monkeypatch.setattr(selection,'foreground_explorer',lambda:123)
+    shortcut._done(123,[])
+    assert not events
