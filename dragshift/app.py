@@ -162,7 +162,14 @@ class DragShiftApp(QObject):
         self.watcher = DragShiftWatcher(lambda: self.menu.isVisible() and not self.menu.click_mode,
                                         lambda: self.menu.got_drag, self)
         self.watcher.set_key(self.settings.get("trigger"))
-        self.watcher.show_menu.connect(lambda pos: self.menu.popup(pos))
+        from .file_drag import FileDragGate
+        self.file_drag = FileDragGate(lambda: self.watcher._state())
+        self.file_drag.enabled = lambda: self.watcher.enabled and not self.menu.isVisible()
+        self.watcher.gesture_started.connect(self.file_drag.begin_gesture)
+        self.watcher.gesture_ended.connect(self.file_drag.cancel)
+        self.watcher.show_menu.connect(self.file_drag.request)
+        self.file_drag.ready.connect(lambda pos, paths: self.menu.popup(pos, drag_paths=paths))
+        qapp.aboutToQuit.connect(self.file_drag.close)
         self.watcher.toggle_ring.connect(self.menu.next_ring)
         self.watcher.hide_menu.connect(self.menu.close_menu)
         from .selection import SelectionShortcut
@@ -381,7 +388,7 @@ class DragShiftApp(QObject):
             elif name == "Resize":
                 self.open_window(tools.ResizeWindow(paths, self.notify))
             else:
-                self.open_window(windows[name](paths[0], self.notify))
+                self.open_window(windows[name](paths, self.notify))
         except UserError as e:
             self.toasts.error(f"Couldn't open {name}", str(e))
         except Exception as e:  # noqa: BLE001

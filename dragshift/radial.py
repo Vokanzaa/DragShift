@@ -133,7 +133,8 @@ class RadialMenu(QWidget):
         self.frame = QTimer(self, interval=16, timeout=self._tick)   # 60 fps springs
 
     # ------------------------------------------------------------ show / hide
-    def popup(self, pos: QPoint | None = None, paths: list[str] | None = None):
+    def popup(self, pos: QPoint | None = None, paths: list[str] | None = None, *,
+              drag_paths: list[str] | None = None):
         pos = pos or QCursor.pos()
         tl = pos - QPoint(SIZE // 2, SIZE // 2)
         scr = QGuiApplication.screenAt(pos) or QGuiApplication.primaryScreen()
@@ -145,14 +146,9 @@ class RadialMenu(QWidget):
         self._capture(tl, pos, paths)
         self.move(tl)
         self.hover = -1
-        self.got_drag = False
+        self.got_drag = bool(drag_paths)
         self.click_mode = paths is not None
-        early = []
-        if paths is None and sys.platform == "darwin":
-            from . import platform_mac
-            early = platform_mac.drag_files()
-            if early:
-                print(f"menu: {len(early)} file(s) from the drag pasteboard", flush=True)
+        early = drag_paths or []
         if paths is not None:
             self._load(paths)
         elif early:

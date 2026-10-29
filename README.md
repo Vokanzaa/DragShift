@@ -1,12 +1,14 @@
 # DragShift — local file tools
 
-## Custom build 1.1.0+files.10
+## Custom build 1.1.0+files.12
 
 **Install:** [Windows installer](https://github.com/Vokanzaa/DragShift/releases/latest/download/DragShift-Setup.exe) · [all desktop packages and release version](https://github.com/Vokanzaa/DragShift/releases/latest).
 
 **Source:** [main branch](https://github.com/Vokanzaa/DragShift/tree/main) · [source ZIP](https://github.com/Vokanzaa/DragShift/archive/refs/heads/main.zip). Source downloads contain code; choose a packaged application above to install and use it. While a new release is building, main can be newer than the published package. The release page identifies the packaged version.
 
-New in files.10: direct distortion keyframes with absolute strength, editable random variations, independent audio distortion, clearer preview/export ranges and faster default-size frame processing. The local source suite passed **517 tests**. Releases are published only after the complete native desktop build matrix succeeds.
+New in files.12: only real file drags can reveal the radial menu; plain Shift, text drags and drawing gestures stay in the active app. New in files.11: shared image settings now process the entire selected series for crop, Edit, backgrounds, annotations, redaction and metadata removal. Resize and compression also use transactional batch completion. **553 local source tests passed.** Releases are published only after the complete native desktop build matrix succeeds.
+
+Files.10 added direct distortion keyframes with absolute strength, editable random variations, independent audio distortion, clearer preview/export ranges and faster default-size frame processing. Its local source suite passed **517 tests**.
 
 This local extension is based on [llamaboi55/DragShift](https://github.com/llamaboi55/DragShift), upstream commit `88abe0cf392b80ad2db805ef12b020c76a6cf458` retrieved on 2026-10-19. It is not an official upstream release. The custom Windows package adds video, audio, experimental Datamosh and archive workflows to the original Shift-drag radial menu, with neutral matte glass.
 
@@ -24,7 +26,7 @@ Launch DragShift once; it stays in the system tray. There is no standalone file 
 
 Choose a format in **Convert**, or an operation in **Tools**. Editors open only after choosing a tool. Several files of the same type can be dragged together. The tray icon opens its control menu, with **Settings…**, **How to use** and **Quit DragShift**. The per-user installer can add Explorer's **DragShift…** and **Send to → DragShift** entries, which also use the radial menu. Ctrl or Alt can replace Shift in Settings.
 
-For nonadjacent files in a Windows Explorer folder, select them with Ctrl, release Ctrl, then **tap and release Shift without clicking**. A click radial menu opens for that exact selection. Holding Shift while clicking a file retains Explorer's normal range-selection behavior. The tap shortcut requires at least two items in an Explorer folder and a Shift trigger; it does not read desktop selection and refuses ambiguous tabbed views. Normal file dragging works on every supported platform and uses the final dropped file list.
+For nonadjacent files in a Windows Explorer folder, select them with Ctrl, release Ctrl, then **tap and release Shift without clicking**. A click radial menu opens for that exact selection. Holding Shift while clicking a file retains Explorer's normal range-selection behavior. The tap shortcut requires at least two items in an Explorer folder and a Shift trigger; it does not read desktop selection and refuses ambiguous tabbed views. Normal file dragging works on every supported platform and uses the final dropped file list. The global modifier/mouse gesture is validated against a native local-file drag before showing the ring. Plain Shift, typing, drawing, text selection and web-link drags do not reveal tools. The drag probe does not take keyboard focus or grab the mouse. macOS retains the stationary Finder handoff only when its file-drag pasteboard changed during the current mouse gesture; old clipboard/drag data and inactive Explorer selections cannot open tools.
 
 ## Supported workflows
 
@@ -43,6 +45,8 @@ Available decoders and encoders determine whether a particular file is readable.
 GIF-to-video conversion chooses a frame grid compatible with its centisecond delays (at least 30 fps, up to 100 fps) instead of dropping very short source frames. Telegram's separate profile is capped at 30 fps by its specification, so faster animations necessarily lose temporal detail there.
 
 Numeric slider values are editable with the keyboard; Enter confirms the value without exporting. Open tools accept local-file drops: source editors replace the current input, while Melt/audio sequence lists append files. Drop onto either Melt preview to replace that clip. Sequence rows can be reordered by dragging or with the up/down buttons. Pack accepts additional files and folders.
+
+For a selected image series, **Crop, Edit, Add BG, Annotate, Redact, Metadata, Compress and Resize** open one editor. Its preview shows the first source; saving applies the shared settings to every selected file. Crop/hidden areas and annotations scale proportionally to each correctly oriented canvas; fixed crop ratios stay fixed. Identical-size inputs keep the exact same coordinates. Edits preserve GIF animation and produce separate new results. A multi-image drop replaces the selected series. Background **Copy preview** copies the first result to the clipboard. Cancellation or a later failure rolls back earlier new results from that batch.
 
 DOCX → PDF uses Microsoft Word when available, otherwise a basic local renderer. PDF → DOCX rebuilds paragraphs and images. Complex layouts, fonts, tables, headers, charts and scanned pages may not reproduce accurately; scanned text is not recognized with OCR.
 

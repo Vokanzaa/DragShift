@@ -177,6 +177,17 @@ def set_autostart(on: bool):
 
 
 # ---------------------------------------------------------------- drag pasteboard
+def drag_generation():
+    """Generation of the drag pasteboard, not the ordinary copy clipboard."""
+    if not OK:
+        return None
+    try:
+        name = getattr(AppKit, 'NSPasteboardNameDrag', None) or getattr(AppKit, 'NSDragPboard', 'Apple CFPasteboard drag')
+        return int(AppKit.NSPasteboard.pasteboardWithName_(name).changeCount())
+    except Exception:
+        return None
+
+
 def drag_files() -> list[str]:
     """Files being dragged right now, read from the system drag pasteboard.
     macOS only tells a window about a drag once the cursor moves over it; reading the pasteboard

@@ -90,6 +90,76 @@ def _check_distortion_editor(base):
         i18n.set_language(previous_language)
 
 
+def _check_image_series(base):
+    """Save the complete selection through every shared image editor EN/RU."""
+    from PIL import Image
+    from PySide6.QtCore import QPointF,QRectF
+    from . import i18n,tools
+    first,second=base/'series.gif',base/'series.png'
+    Image.new('RGB',(80,60),'red').save(first,save_all=True,
+        append_images=[Image.new('RGB',(80,60),'blue')],duration=[80,170],loop=2)
+    Image.new('RGB',(160,120),'green').save(second)
+    language=i18n.language()
+    try:
+        for selected_language in ('en','ru'):
+            i18n.set_language(selected_language)
+            for cls,method in ((tools.CropWindow,'apply'),(tools.EditWindow,'save'),
+                               (tools.AddBgWindow,'save'),(tools.AnnotateWindow,'save'),
+                               (tools.RedactWindow,'save'),(tools.MetadataWindow,'strip')):
+                results=[]
+                window=cls([first,second],lambda action,paths,outs,*extra:results.extend(outs))
+                if cls is tools.CropWindow:
+                    window.view.sel=QRectF(20,15,40,30)
+                elif cls is tools.EditWindow:
+                    window.gray.setChecked(True)
+                elif cls is tools.AnnotateWindow:
+                    window.view.shapes=[tools.Shape('Step','#ffffff',2,[QPointF(40,30)],'1')]
+                elif cls is tools.RedactWindow:
+                    window.view.rects=[QRectF(20,15,40,30)]
+                window.show()
+                QApplication.processEvents()
+                assert not window.grab().isNull()
+                getattr(window,method)()
+                assert len(results)==2 and all(path.is_file() for path in results)
+                with Image.open(results[0]) as animation:
+                    assert animation.n_frames==2 and animation.info['loop']==2
+                if cls is tools.CropWindow:
+                    assert [Image.open(path).size for path in results]==[(40,30),(80,60)]
+                QApplication.processEvents()
+    finally:
+        i18n.set_language(language)
+
+
+def _check_file_drag_guard(base):
+    from PySide6.QtCore import QMimeData, QPoint, Qt, QUrl
+    from PySide6.QtGui import QDragEnterEvent
+    from .file_drag import FileDragGate
+    gate=FileDragGate(lambda:(True,True,False))
+    received=[]
+    gate.ready.connect(lambda pos,paths:received.append(paths))
+    try:
+        gate.request(QPoint(320,240))
+        assert not received
+        text=QMimeData()
+        text.setText('Shift while editing text')
+        event=QDragEnterEvent(QPoint(2,2),Qt.CopyAction,text,Qt.LeftButton,Qt.ShiftModifier)
+        gate.dragEnterEvent(event)
+        QApplication.processEvents()
+        assert not received and not gate.isVisible()
+        source=base/'guard-file.txt'
+        source.write_text('file payload',encoding='utf-8')
+        gate.request(QPoint(320,240))
+        mime=QMimeData()
+        mime.setUrls([QUrl.fromLocalFile(str(source))])
+        event=QDragEnterEvent(QPoint(2,2),Qt.CopyAction|Qt.MoveAction,mime,Qt.LeftButton,Qt.ShiftModifier)
+        gate.dragEnterEvent(event)
+        QApplication.processEvents()
+        assert len(received)==1 and Path(received[0][0])==source
+        assert event.dropAction()==Qt.CopyAction
+    finally:
+        gate.close()
+
+
 def selftest():
     from .video_check import selftest as video_selftest
     if video_selftest() != 0:
@@ -162,6 +232,8 @@ def selftest():
             with Image.open(frame) as image:
                 assert image.getpixel((40,30))[:3]==(0,0,255)
             _check_distortion_editor(base)
+            _check_image_series(base)
+            _check_file_drag_guard(base)
             source = base / "archive.zip"
             with zipfile.ZipFile(source, "w") as z:
                 z.writestr("folder/hello.txt", "DragShift test")

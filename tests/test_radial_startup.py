@@ -26,6 +26,7 @@ def controller(qapp, monkeypatch):
     instance.server.close()
     instance.tray.hide()
     instance.menu.close_menu()
+    instance.file_drag.close()
     for window in list(instance.windows):
         window.close()
     instance.deleteLater()
@@ -85,11 +86,29 @@ def test_second_launch_only_shows_a_short_hint(controller, monkeypatch):
     assert notices == ["ready"] and controller.windows == []
 
 
-def test_shift_drag_still_opens_the_ring(controller, monkeypatch):
+def test_shift_drag_still_opens_the_ring(controller, monkeypatch, tmp_path, qapp):
+    from PySide6.QtCore import QMimeData, Qt, QUrl
+    from PySide6.QtGui import QDragEnterEvent
     positions = []
-    monkeypatch.setattr(controller.menu, "popup", lambda pos: positions.append(pos))
+    monkeypatch.setattr(controller.menu, "popup", lambda pos, **kw: positions.append((pos, kw)))
+    monkeypatch.setattr(controller.watcher, '_state', lambda: (True, True, False))
     controller.watcher.show_menu.emit(QPoint(320, 240))
-    assert positions == [QPoint(320, 240)]
+    assert not positions
+    path = tmp_path / 'chosen.png'
+    path.touch()
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(str(path))])
+    event = QDragEnterEvent(QPoint(2, 2), Qt.CopyAction, mime, Qt.LeftButton, Qt.ShiftModifier)
+    controller.file_drag.dragEnterEvent(event)
+    qapp.processEvents()
+    assert len(positions) == 1 and positions[0][0] == QPoint(320, 240)
+    assert [__import__('pathlib').Path(p) for p in positions[0][1]['drag_paths']] == [path]
     for name, expected in [("clip.mp4", "Datamosh"), ("track.wav", "Normalize"), ("photo.png", "Crop")]:
         ring = controller.build_rings([name])
         assert expected in {item.label for item in ring["Tools"]}
+
+
+def test_global_shift_mouse_gesture_alone_never_displays_ring(controller, monkeypatch):
+    monkeypatch.setattr(controller.watcher, '_state', lambda: (True, True, False))
+    controller.watcher.show_menu.emit(QPoint(320, 240))
+    assert not controller.menu.isVisible()

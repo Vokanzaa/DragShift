@@ -824,5 +824,10 @@
   "Maximum video/image size": "Максимальный размер",
   "Maximum longest side; keeps the aspect ratio and never enlarges. For example, 1424 × 1904 becomes 478 × 640 at 640 px.": "Ограничивает большую сторону, сохраняя пропорции, без увеличения. Например, 1424 × 1904 станет 478 × 640 при ограничении 640 пикс.",
   "Time": "Время",
-  "{0} s": "{0} с"
+  "{0} s": "{0} с",
+  "The same settings apply to every selected image. Preview shows the first. Areas scale to each image.": "Настройки применяются ко всем выбранным картинкам. Предпросмотр показывает первую. Области подгоняются пропорционально размеру каждой картинки.",
+  "Copy preview": "Копировать превью",
+  "Copy the first result to the clipboard": "Копировать первый результат в буфер обмена",
+  "Removed metadata from {0} images": "Метаданные удалены из картинок: {0}",
+  "File ready": "Файл готов"
 }

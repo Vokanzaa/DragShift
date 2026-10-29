@@ -476,8 +476,12 @@ def batch(paths, fn) -> list[Path]:
                     parent.progress((index + value) / len(paths), f"{index + 1}/{len(paths)} · {name} · {text}")
                 with job_context(Control(cancel=parent.cancel, progress=update)):
                     outs.extend(fn(path))
+                    # Register published outputs before a cancellation-aware
+                    # completion update can raise, including the final item.
+                    progress(1,'File ready')
             else:
                 outs.extend(fn(path))
+                check_cancel()
         return outs
     except Exception:
         # Cleanup itself must never hide the original processing/cancel error.
