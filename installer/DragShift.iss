@@ -1,7 +1,7 @@
 ; Inno Setup script — per-user install, no admin rights needed.
 #define AppVersion GetEnv("DS_VERSION")
 #if AppVersion == ""
-  #define AppVersion "1.1.0+files.13"
+  #define AppVersion "1.1.0+files.14"
 #endif
 #define AppCompression GetEnv("DS_COMPRESSION")
 #if AppCompression == ""
@@ -63,10 +63,17 @@ Root: HKCU; Subkey: "Software\Classes\*\shell\DragShift"; ValueType: string; Val
 Root: HKCU; Subkey: "Software\Classes\*\shell\DragShift"; ValueType: string; ValueName: "MultiSelectModel"; ValueData: "Player"; Tasks: contextmenu
 Root: HKCU; Subkey: "Software\Classes\*\shell\DragShift\command"; ValueType: string; ValueName: ""; ValueData: """{app}\DragShift.exe"" ""%1"""; Tasks: contextmenu
 Root: HKCU; Subkey: "Software\DragShift"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\DragShift\DragShift"; ValueType: string; ValueName: "language"; ValueData: "{language}"
+Root: HKCU; Subkey: "Software\DragShift\DragShift"; ValueType: string; ValueName: "language"; ValueData: "{language}"; Check: not IsUpdateInstall
 
 [Run]
 Filename: "{app}\DragShift.exe"; Description: "{cm:LaunchNow}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\DragShift.exe"; Parameters: "--quiet"; Flags: nowait; Check: IsUpdateInstall
 
 [UninstallRun]
 Filename: "{cmd}"; Parameters: "/C taskkill /F /IM DragShift.exe"; Flags: runhidden; RunOnceId: "KillDragShift"
+
+[Code]
+function IsUpdateInstall: Boolean;
+begin
+  Result := ExpandConstant('{param:DRAGSHIFTUPDATE|0}') = '1';
+end;
