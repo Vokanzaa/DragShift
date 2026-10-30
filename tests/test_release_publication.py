@@ -114,7 +114,8 @@ def test_publication_pins_tag_source_and_requires_complete_assets():
         assert f'            out/{name}' in text
     assert 'tag_name: latest' not in text and 'macOS 11+' not in text
     assert 'raw.githubusercontent.com/llamaboi55' not in text
-    assert 'Source code' in text and 'video' in text.lower() and 'lenticular' in text and 'Telegram' in text
+    assert 'body_path: release-body.md' in text and 'generate_release_notes: true' in text
+    assert 'packaging/release_notes.py' in text and '--version' in text and '--commit "$GITHUB_SHA"' in text
 
 
 def test_mac_installer_downloads_this_fork():

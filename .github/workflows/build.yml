@@ -412,6 +412,15 @@ jobs:
               output.write(f'version={version}\ntag={tag}\nname=DragShift {version}\n')
           PY
 
+      - name: Prepare application update notes
+        run: >-
+          python3 packaging/release_notes.py
+          --version '${{ steps.release.outputs.version }}'
+          --tag '${{ steps.release.outputs.tag }}'
+          --commit "$GITHUB_SHA"
+          --repository "$GITHUB_REPOSITORY"
+          --output release-body.md
+
       - uses: actions/download-artifact@v4
         with:
           path: out
@@ -426,28 +435,8 @@ jobs:
           prerelease: false
           make_latest: true
           fail_on_unmatched_files: true
-          body: |
-            ## DragShift ${{ steps.release.outputs.version }}
-
-            Video and audio conversion/editing, classic Melt datamosh with clip sequences,
-            lenticular interlace/projects and Windows direct printing, Telegram emoji export,
-            animated GIF editing, Liquid Rescale distortion and ZIP/7Z archives are included.
-            The Shift-and-drag radial workflow and captured matte glass remain.
-
-            **Download the packaged application:**
-            - [Windows x64 installer — DragShift-Setup.exe](https://github.com/${{ github.repository }}/releases/download/${{ steps.release.outputs.tag }}/DragShift-Setup.exe) — recommended; per-user installation, Русский / English, Start menu and optional Explorer integration.
-            - [Windows portable — DragShift.exe](https://github.com/${{ github.repository }}/releases/download/${{ steps.release.outputs.tag }}/DragShift.exe).
-            - [Mac Apple Silicon — DragShift-mac-apple-silicon.dmg](https://github.com/${{ github.repository }}/releases/download/${{ steps.release.outputs.tag }}/DragShift-mac-apple-silicon.dmg).
-            - [Intel Mac — DragShift-mac-intel.dmg](https://github.com/${{ github.repository }}/releases/download/${{ steps.release.outputs.tag }}/DragShift-mac-intel.dmg).
-            - [Linux Debian/Ubuntu x64 — DragShift-linux-amd64.deb](https://github.com/${{ github.repository }}/releases/download/${{ steps.release.outputs.tag }}/DragShift-linux-amd64.deb) — tested on Debian 12/XFCE with X11.
-
-            Packages include the Python/Qt runtime and native media engines (FFmpeg/FFprobe,
-            FFglitch, 7-Zip and ImageMagick/Liquid Rescale); separate engine installation is not required.
-            Mac packages are tested on macOS 15 and ad-hoc signed; Apple notarization is not configured.
-
-            **Source code** ZIP/TAR downloads contain source files, not an installed application.
-            For normal use, choose one of the five application packages above.
-            Built and tested automatically from commit ${{ github.sha }} after all native platforms passed.
+          body_path: release-body.md
+          generate_release_notes: true
           files: |
             out/DragShift-Setup.exe
             out/DragShift.exe

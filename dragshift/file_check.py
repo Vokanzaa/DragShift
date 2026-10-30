@@ -180,6 +180,53 @@ def _check_gif_sequence(base):
         i18n.set_language(language)
 
 
+def _check_updates(base):
+    """Exercise the shipped HTTPS/download modules and update UI without the network."""
+    import hashlib,io
+    from . import i18n,updates,update_install
+    from .update_tools import UpdateWindow
+    assert updates.network() is not None
+    payload=b'DragShift update control'
+    tag='v9.0.0'
+    data={'tag_name':tag,'html_url':updates.REPOSITORY+'/releases/tag/'+tag,'name':'Control release',
+          'body':'**Control changes**\n\n- Ordered animation and update checks.','draft':False,'prerelease':False,
+          'assets':[{'name':name,'state':'uploaded','size':len(payload),'digest':'sha256:'+hashlib.sha256(payload).hexdigest(),
+                     'browser_download_url':updates.REPOSITORY+'/releases/download/'+tag+'/'+name} for name in updates.ASSETS]}
+    info=updates.parse_release(data,'1.0.0')
+    class Response(io.BytesIO):
+        headers={'Content-Length':str(len(payload))}
+    class Opener:
+        def open(self,*_,**__):return Response(payload)
+    def download(release,folder,**options):
+        return updates.download(release,base/'update-cache',opener=Opener(),**options)
+    language=i18n.language()
+    window=None
+    try:
+        for selected_language in ('en','ru'):
+            i18n.set_language(selected_language)
+            launched=[]
+            window=UpdateWindow('1.0.0',lambda:False,lambda:None,downloader=download,
+                preparer=lambda path,release,lang:update_install.prepare(path,release,lang,frozen=False),
+                launcher=lambda handoff:launched.append(handoff) or False)
+            window.show_result(info)
+            window.show()
+            QApplication.processEvents()
+            assert window.skip.text()==i18n.tr('Skip this version') and not window.grab().isNull()
+            assert 'Control changes' in window.notes.toPlainText()
+            window.primary.click()
+            deadline=time.monotonic()+15
+            while time.monotonic()<deadline and not launched:
+                QApplication.processEvents()
+                time.sleep(.01)
+            assert len(launched)==1
+            assert not launched[0].quit_app
+            window=None
+            QApplication.processEvents()
+    finally:
+        if window is not None:window.close()
+        i18n.set_language(language)
+
+
 def _check_file_drag_guard(base):
     from PySide6.QtCore import QMimeData, QPoint, Qt, QUrl
     from PySide6.QtGui import QDragEnterEvent
@@ -284,6 +331,7 @@ def selftest():
             _check_distortion_editor(base)
             _check_image_series(base)
             _check_gif_sequence(base)
+            _check_updates(base)
             _check_file_drag_guard(base)
             source = base / "archive.zip"
             with zipfile.ZipFile(source, "w") as z:

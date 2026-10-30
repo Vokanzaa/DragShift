@@ -27,6 +27,10 @@ DEFAULTS = {
     "pdf_dpi": 200,
     "trigger": "shift",
     "welcomed": False,
+    "check_updates": True,
+    "update_last_check": 0,
+    "update_snooze_until": 0,
+    "update_skipped": "",
 }
 
 
@@ -110,9 +114,10 @@ DPIS = [(150, "150 dpi · small"), (200, "200 dpi · balanced"), (300, "300 dpi 
 
 class SettingsWindow(GlassWindow):
     changed = Signal()
+    check_updates_requested = Signal()
 
     def __init__(self, settings: Settings):
-        super().__init__("Settings", size=(600, 540))
+        super().__init__("Settings", size=(600, 620))
         self.s = settings
         grid = QGridLayout()
         grid.setHorizontalSpacing(14)
@@ -179,6 +184,14 @@ class SettingsWindow(GlassWindow):
             self.auto.toggled.connect(set_autostart)
             grid.addWidget(self.auto, r, 1)
             r += 1
+        self.updates=QCheckBox(tr('Automatically check for updates'))
+        self.updates.setChecked(self.s.get('check_updates'))
+        self.updates.toggled.connect(lambda on:self._save('check_updates',on))
+        grid.addWidget(self.updates,r,1)
+        r+=1
+        self.check_updates_button=QPushButton(tr('Check for updates…'))
+        self.check_updates_button.clicked.connect(self.check_updates_requested.emit)
+        grid.addWidget(self.check_updates_button,r,1)
         self.body.addLayout(grid)
         self.body.addStretch(1)
         about = QLabel(tr(f"DragShift {__version__}  ·  originals are never modified"))
