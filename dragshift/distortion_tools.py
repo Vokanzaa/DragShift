@@ -76,12 +76,12 @@ class DistortionWindow(_AsyncTools):
         row.addWidget(self.audio_strength_number)
         self.audio_controls=QWidget()
         self.audio_controls.setLayout(row)
-        form.addRow(tr('Audio distortion'),self.audio_controls)
+        form.addRow(tr('Audio pitch wave'),self.audio_controls)
         self.audio_label=form.labelForField(self.audio_controls)
         self.keep_audio=QCheckBox(tr('Keep source audio'))
         self.keep_audio.setChecked(True)
         form.addRow(self.keep_audio)
-        self.audio_note=QLabel(tr('Audio is distorted while saving MP4/WebM. 0 keeps the original sound.'))
+        self.audio_note=QLabel(tr('Pitch rises and falls with the video keyframes. This slider sets the range; 0 keeps the original sound.'))
         self.audio_note.setObjectName('dim')
         self.audio_note.setWordWrap(True)
         form.addRow(self.audio_note)
@@ -174,6 +174,7 @@ class DistortionWindow(_AsyncTools):
         for widget in self.segment_widgets:
             widget.setVisible(segment)
         self.primary_btn.setText(tr('Save PNG frame' if self.target.currentText()=='PNG' else f'Save {self.target.currentText()}'))
+        self.primary_btn.setMinimumWidth(self.primary_btn.fontMetrics().horizontalAdvance(self.primary_btn.text())+38)
         self._audio_changed()
 
     def _audio_changed(self,*_):
@@ -181,7 +182,7 @@ class DistortionWindow(_AsyncTools):
         self.keep_audio.setEnabled(available)
         self.audio_controls.setEnabled(available and self.keep_audio.isChecked())
         self.audio_label.setEnabled(available and self.keep_audio.isChecked())
-        self.audio_note.setText(tr('Audio is distorted while saving MP4/WebM. 0 keeps the original sound.' if available
+        self.audio_note.setText(tr('Pitch rises and falls with the video keyframes. This slider sets the range; 0 keeps the original sound.' if available
                                   else 'This source has no audio.' if self.info and not self.info.has_audio
                                   else 'This format saves no audio.'))
 

@@ -223,7 +223,9 @@ class MeltTimelinePanel(QWidget):
         form.addRow(self.enabled)
         self.duration = _seconds(2)
         self.duration.setRange(.1,60)
-        _field(form,'Transition duration',self.duration)
+        from .melt_controls import MeltPhase, MeltPreview
+        self.phase = MeltPhase(self.duration)
+        form.addRow(self.phase)
         self.strength = QSlider(Qt.Horizontal)
         self.strength.setRange(1,100)
         self.strength.setValue(65)
@@ -243,6 +245,8 @@ class MeltTimelinePanel(QWidget):
         self.audio = QCheckBox(tr('Keep audio from selected clips'))
         self.audio.setChecked(True)
         form.addRow(self.audio)
+        self.effect_preview=MeltPreview(owner)
+        form.addRow(self.effect_preview)
         note = QLabel(tr('One track: move clips to reorder; drag edges to trim. Select a Melt marker to change only that transition. Split uses the playhead. No clean-video overlay is mixed into the effect.'))
         note.setWordWrap(True)
         parameters = _scroll_panel(form,note)
@@ -270,8 +274,11 @@ class MeltTimelinePanel(QWidget):
         self.view.seek.connect(self.seek)
         self.start.editingFinished.connect(self.trim)
         self.end.editingFinished.connect(self.trim)
-        for widget in (self.enabled,self.duration,self.strength):
+        for widget in (self.enabled,self.strength):
             (widget.toggled if isinstance(widget,QCheckBox) else widget.valueChanged).connect(self.edit_cut)
+        self.phase.changed.connect(self.edit_cut)
+        self.view.changed.connect(self.effect_preview.invalidate)
+        for control in (self.resolution,self.fps):control.currentIndexChanged.connect(self.effect_preview.invalidate)
         self._preview_timer = QTimer(self,interval=100,singleShot=True,timeout=self.load_preview)
         self.refresh()
 
@@ -320,6 +327,7 @@ class MeltTimelinePanel(QWidget):
         self.view.refresh()
 
     def select(self, kind, index):
+        if self.selection!=(kind,index):self.effect_preview.invalidate()
         self.selection = kind,index
         self.view.selection = self.selection
         self.refresh()
@@ -337,13 +345,15 @@ class MeltTimelinePanel(QWidget):
         # fields pushing a cut's strength and duration below the scroll area.
         for field in (self.start, self.end):
             self.parameter_form.setRowVisible(field, kind == 'clip')
-        for field in (self.enabled, self.duration, self.strength_row):
+        for field in (self.enabled, self.phase, self.strength_row):
             self.parameter_form.setRowVisible(field, kind == 'cut')
+        self.duration.setVisible(kind=='cut')
         for key in ('←','→','Remove clip'):
             self.edit_buttons[key].setEnabled(active and kind=='clip')
         self.edit_buttons['Split at playhead'].setEnabled(active)
         for widget in (self.start,self.end): widget.setEnabled(active and kind=='clip')
         for widget in (self.enabled,self.duration,self.strength): widget.setEnabled(active and kind=='cut' and len(self.model.clips)>1)
+        self.phase.setEnabled(active and kind=='cut' and len(self.model.clips)>1)
         if active:
             clip = self.model.clips[index]
             self.selected_label.setText(tr('Clip {0} · {1}').format(index+1,clip.path.name) if kind=='clip'
@@ -355,10 +365,13 @@ class MeltTimelinePanel(QWidget):
                 widget.blockSignals(False)
             if kind=='cut' and index+1<len(self.model.clips):
                 cut = self.model.cut(index)
-                for widget,value in ((self.enabled,cut.enabled),(self.duration,cut.duration),(self.strength,cut.strength)):
+                for widget,value in ((self.enabled,cut.enabled),(self.strength,cut.strength)):
                     widget.blockSignals(True)
                     widget.setChecked(value) if isinstance(widget,QCheckBox) else widget.setValue(value)
                     widget.blockSignals(False)
+                following=self.model.clips[index+1]
+                self.phase.set_times(clip.duration,following.duration,cut.lead,cut.duration,cut.smooth,
+                    source_end=clip.end,source_start=following.start)
         else:
             self.selected_label.setText(tr('Drop at least two clips here.'))
         self.save_btn.setEnabled(len(self.model.clips)>=2 and not self.loading)
@@ -374,11 +387,14 @@ class MeltTimelinePanel(QWidget):
         except UserError as error:
             self.error.setText(tr(str(error)))
         self.refresh()
+        self.effect_preview.invalidate()
 
     def edit_cut(self, *_):
         if self.selection[0]!='cut' or len(self.model.clips)<2: return
         cut = self.model.cut(self.selection[1])
         cut.duration,cut.strength,cut.enabled = self.duration.value(),self.strength.value(),self.enabled.isChecked()
+        cut.lead,cut.smooth=self.phase.lead.value(),self.phase.smooth.isChecked()
+        self.effect_preview.invalidate()
         self.view.update()
 
     def move(self, delta):
@@ -390,6 +406,7 @@ class MeltTimelinePanel(QWidget):
         self.model.remove(self.selection[1])
         self.selection = 'clip',max(0,self.selection[1]-1)
         self.refresh()
+        self.effect_preview.invalidate()
 
     def split(self):
         if not self.model.clips: return
@@ -433,6 +450,9 @@ class MeltTimelinePanel(QWidget):
             model.validate(self.fps.currentData())
         except UserError as error:
             self.error.setText(tr(str(error)))
+            return
+        if preview:
+            self.effect_preview.build(model,fps=self.fps.currentData())
             return
         max_side,fps,audio = 480 if preview else self.resolution.currentData(),self.fps.currentData(),self.audio.isChecked()
         fn = lambda:render(model,max_side=max_side,fps=fps,audio=audio)

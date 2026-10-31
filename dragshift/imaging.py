@@ -428,6 +428,7 @@ class Adjust:
     flip_h: bool = False
     flip_v: bool = False
     grayscale: bool = False
+    invert: bool = False
     resize_pct: int = 100
 
 
@@ -447,7 +448,7 @@ def auto_enhance(im: Image.Image) -> Adjust:
 
 
 def apply_adjust(im: Image.Image, a: Adjust) -> Image.Image:
-    alpha = im.split()[3] if im.mode == "RGBA" else None
+    alpha = im.convert('RGBA').getchannel('A') if 'A' in im.getbands() or 'transparency' in im.info else None
     rgb = im.convert("RGB")
     if a.brightness != 1.0:
         rgb = ImageEnhance.Brightness(rgb).enhance(a.brightness)
@@ -465,6 +466,8 @@ def apply_adjust(im: Image.Image, a: Adjust) -> Image.Image:
         rgb = Image.merge("RGB", (r, g, b))
     if a.grayscale:
         rgb = ImageOps.grayscale(rgb).convert("RGB")
+    if a.invert:
+        rgb = ImageOps.invert(rgb)
     out = rgb
     if alpha is not None:
         out = rgb.convert("RGBA")

@@ -526,7 +526,9 @@ class DatamoshWindow(_AsyncTools):
         self.fps.setCurrentIndex(2)
         _field(self.form, '&Last seconds of A', self.tail)
         _field(self.form, '&First seconds of B', self.head)
-        _field(self.form, '&Transition duration', self.duration)
+        from .melt_controls import MeltPhase, MeltPreview
+        self.phase = MeltPhase(self.duration)
+        self.form.addRow(self.phase)
         _field(self.form, '&Preset', self.preset)
         self.form.addRow(tr('Intensity'), strength_row)
         _field(self.form, '&Resolution', self.resolution)
@@ -534,9 +536,17 @@ class DatamoshWindow(_AsyncTools):
         self.audio = QCheckBox(tr('Keep audio from both selected segments'))
         self.audio.setChecked(True)
         self.form.addRow(self.audio)
-        self.note = QLabel(tr('FFglitch motion vectors + keyframe removal · Export: MP4\n'
-            'Motion-rich footage gives stronger results. B returns cleanly after the transition.\n'
-            'Preview renders a short 480 px excerpt; open it from the result notification.'))
+        self.effect_preview = MeltPreview(self)
+        self.form.addRow(self.effect_preview)
+        self.phase.changed.connect(self.effect_preview.invalidate)
+        for control in (self.tail,self.head):
+            control.valueChanged.connect(self._sync_phase)
+        for control in (self.strength,self.resolution,self.fps,self.audio):
+            signal = control.valueChanged if isinstance(control,QSlider) else control.toggled if isinstance(control,QCheckBox) else control.currentIndexChanged
+            signal.connect(self.effect_preview.invalidate)
+        self.note = QLabel(tr('Choose when A starts breaking and when B becomes clear. '
+            'Render the effect preview, then play or scrub it here. The preview keeps the complete effect interval. '
+            'Reverse recovery is experimental; compare it with classic Melt.'))
         self.note.setObjectName('dim')
         self.note.setWordWrap(True)
         self.body.addWidget(_scroll_panel(self.form, self.note), 1)
@@ -670,6 +680,27 @@ class DatamoshWindow(_AsyncTools):
         enabled = self.first_info is not None and self.second_info is not None
         self.primary_btn.setEnabled(enabled)
         self.preview_btn.setEnabled(enabled)
+        self._sync_phase()
+
+    def _sync_phase(self, *_):
+        self.phase.set_times(self.tail.value(),self.head.value(),self.phase.lead.value(),self.duration.value(),
+            self.phase.smooth.isChecked(),source_end=self.first_info.duration if self.first_info else self.tail.value())
+        self.effect_preview.invalidate()
+
+    def effect_model(self):
+        from .melt_timeline import Timeline
+        model=Timeline()
+        model.add(self.path,self.first_info.duration,max(0,self.first_info.duration-self.tail.value()),self.first_info.duration)
+        model.add(self.second_path,self.second_info.duration,0,self.head.value())
+        cut=model.cut(0)
+        cut.duration,cut.strength=self.duration.value(),self.strength.value()
+        cut.lead,cut.smooth=self.phase.lead.value(),self.phase.smooth.isChecked()
+        return model
+
+    def closeEvent(self,event):
+        self.effect_preview.close_preview()
+        self.timeline_panel.effect_preview.close_preview()
+        super().closeEvent(event)
 
     def validate(self):
         self.error.clear()
@@ -679,19 +710,24 @@ class DatamoshWindow(_AsyncTools):
             self.error.setText(tr('The transition must end at least 0.1 seconds before the selected B segment ends.'))
             self.duration.setFocus()
             return False
+        try:
+            self.effect_model().validate(self.fps.currentData())
+        except UserError as problem:
+            self.error.setText(tr(str(problem)))
+            return False
         return True
 
     def save(self, checked=False, *, preview=False):
         if not self.validate():
             return
-        opts = dict(tail=self.tail.value(), head=self.head.value(), duration=self.duration.value(),
-                    strength=self.strength.value(), preset='Melt', max_side=self.resolution.currentData(),
-                    audio=self.audio.isChecked(), fps=self.fps.currentData())
+        from .melt_timeline import render
+        model=self.effect_model()
         if preview:
-            opts.update(tail=min(opts['tail'], 1.5), duration=min(opts['duration'], 3), max_side=480)
-            opts['head'] = min(opts['head'], opts['duration'] + .75)
+            self.effect_preview.build(model.preview(0),fps=self.fps.currentData())
+            return
         a, b = self.path, self.second_path
-        fn = lambda: datamosh.transition(a, b, **opts)
+        resolution,fps,audio=self.resolution.currentData(),self.fps.currentData(),self.audio.isChecked()
+        fn = lambda: render(model,max_side=resolution,fps=fps,audio=audio)
         if self.submit:
             self.submit('tool:Datamosh', [str(a), str(b)], fn, 'Creating Datamosh transition…',
                         'Preview · Melt' if preview else 'Melt')

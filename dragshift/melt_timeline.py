@@ -26,6 +26,8 @@ class Cut:
     duration: float = 2.
     strength: int = 65
     enabled: bool = True
+    lead: float = 0.
+    smooth: bool = False
 
 
 class Timeline:
@@ -109,24 +111,30 @@ class Timeline:
         for index in range(len(self.clips)-1):
             cut = self.cut(index)
             if (not math.isfinite(cut.duration) or not .1 <= cut.duration <= 60
-                    or not math.isfinite(cut.strength) or not 1 <= cut.strength <= 100):
+                    or not math.isfinite(cut.strength) or not 1 <= cut.strength <= 100
+                    or not math.isfinite(cut.lead) or not 0 <= cut.lead <= min(60,max(0.,self.clips[index].duration-.1))):
                 raise UserError('Choose a transition duration from 0.1 to 60 seconds and intensity from 1 to 100.')
+            if cut.enabled and cut.smooth and round(cut.lead*fps)<3:
+                raise UserError('Allow at least 0.1 seconds before the cut for smooth Melt entry.')
+            if cut.enabled and cut.smooth and round(cut.lead*fps)+3>counts[index]:
+                raise UserError('Leave at least three clean A frames before smooth Melt begins.')
             if cut.enabled and round(cut.duration*fps)+3 > counts[index+1]:
                 raise UserError(f'Transition {index+1}: shorten the effect or lengthen the following clip to leave two clean frames.')
+            if cut.enabled and index and self.cut(index-1).enabled and self.cut(index-1).duration+cut.lead>self.clips[index].duration-.05:
+                raise UserError('The effects on neighbouring cuts overlap. Shorten recovery or move the next onset later.')
         return counts
 
     def preview(self, index):
         preview = Timeline()
         left, right = self.clips[index:index+2]
         cut = copy.deepcopy(self.cut(index))
-        cut.duration = min(cut.duration, 3.)
-        preview.add(left.path, left.source_duration, max(left.start, left.end-1.5), left.end)
+        preview.add(left.path, left.source_duration, max(left.start, left.end-max(1.5,cut.lead+.25)), left.end)
         preview.add(right.path, right.source_duration, right.start, min(right.end, right.start+cut.duration+.75))
         preview.cuts[preview.clips[0].uid, preview.clips[1].uid] = cut
         return preview
 
 
-def render(timeline, *, max_side=720, fps=30, audio=True):
+def render(timeline, *, max_side=720, fps=30, audio=True, directory=None):
     """One MPEG-4 sequence, classic vector edits and I-frame removal; no clean blend."""
     import json
     import tempfile
@@ -134,6 +142,9 @@ def render(timeline, *, max_side=720, fps=30, audio=True):
     counts = timeline.validate(fps)
     if not math.isfinite(max_side) or not 64 <= max_side <= 2160:
         raise UserError('Choose a resolution from 64 to 2160 pixels.')
+    if any(timeline.cut(index).enabled and timeline.cut(index).smooth for index in range(len(timeline.clips)-1)):
+        from .melt_bidirectional import render as render_smooth
+        return render_smooth(timeline,max_side=max_side,fps=fps,audio=audio,directory=directory)
     clips = timeline.clips
     infos = [video.probe(c.path) for c in clips]
     for clip, info in zip(clips, infos):
@@ -147,11 +158,14 @@ def render(timeline, *, max_side=720, fps=30, audio=True):
         boundaries.append(position)
         cut = timeline.cut(index)
         if cut.enabled:
-            ranges.append(dict(start=position, end=position+round(cut.duration*fps), strength=cut.strength))
+            item=dict(start=position, end=position+round(cut.duration*fps), strength=cut.strength)
+            if cut.lead:
+                item.update(start=position-round(cut.lead*fps),cut=position)
+            ranges.append(item)
     first = infos[0]
     scale = min(1., max_side/max(first.display_width, first.display_height))
     width, height = [max(2, round(side*scale/2)*2) for side in (first.display_width,first.display_height)]
-    with video.export_path(clips[0].path, 'Datamosh Melt') as (result, outs):
+    with video.export_path(clips[0].path, 'Datamosh Melt',directory=directory) as (result, outs):
         with tempfile.TemporaryDirectory(prefix='.~mosh-', dir=result.parent) as temporary:
             folder = Path(temporary)
             clean, warped, moshed = [folder/name for name in ('clean.m4v','warped.m4v','moshed.m4v')]
@@ -179,7 +193,7 @@ def render(timeline, *, max_side=720, fps=30, audio=True):
                     if kind is None:
                         stream.write(packet)
                         continue
-                    if kind == 0 and any(r['start'] <= count < r['end'] for r in ranges):
+                    if kind == 0 and any(r.get('cut',r['start']) <= count < r['end'] for r in ranges):
                         removed.append(count)
                     else:
                         stream.write(packet)
