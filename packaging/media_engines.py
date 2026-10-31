@@ -219,10 +219,12 @@ def required_capabilities():
     return {
         'ffmpeg': {
             'encoders': frozenset(AUDIO_ENCODERS.values()) | {
-                'libx264', 'libvpx-vp9', 'mpeg4', 'gif', 'png', 'pcm_f32le'},
+                'libx264', 'libvpx-vp9', 'mpeg4', 'gif', 'png', 'pcm_f32le', 'ffv1'},
             # The libvpx decoder, rather than native vp9, preserves WebM alpha.
             'decoders': frozenset({'libvpx-vp9'}),
             'filters': frozenset({'acrossfade', 'acrusher', 'afade', 'aformat', 'amix', 'anullsrc',
+                'asendcmd', 'asoftclip', 'rubberband',
+                'reverse', 'geq', 'maskedmerge', 'nullsrc',
                 'apad', 'aresample', 'areverse', 'asetnsamples', 'asetpts', 'asplit', 'atempo',
                 'atrim', 'concat', 'crop', 'eq', 'format', 'fps', 'hflip', 'loudnorm', 'pad',
                 'palettegen', 'paletteuse', 'scale', 'setpts', 'setsar', 'tpad', 'transpose',
