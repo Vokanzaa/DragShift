@@ -1,7 +1,8 @@
 """Previewed, no-overwrite batch renames with staging, recovery and safe undo.
 
 Only names change. These results must never use conversion's delete-output Undo.
-The append-only private journal is durable before and after each native move.
+The full recovery plan is durable before the first move. Move records are
+group-synced; recovery locates actual file identities even after an unlogged move.
 """
 from dataclasses import dataclass,replace
 import ctypes
@@ -11,6 +12,7 @@ from pathlib import Path
 import stat
 import sys
 import threading
+import time
 import unicodedata
 import uuid
 
@@ -170,14 +172,26 @@ class _Journal:
         if items is not None and len(json.dumps(items,ensure_ascii=False).encode('utf-8'))>64_000_000:
             raise UserError('The rename recovery plan is too large. Split the selection into smaller groups.')
         self.stream=self.path.open('xb' if items is not None else 'ab')
+        self.pending=0;self.synced=time.monotonic()
         if items is not None:self.append({'type':'plan','version':1,'entries':items})
 
     def append(self,event):
         self.stream.write((json.dumps(event,ensure_ascii=False)+'\n').encode('utf-8'))
         self.stream.flush()
-        os.fsync(self.stream.fileno())
+        self.pending+=1
+        # The durable header lists every source/target/temp path and identity.
+        # Recovery deliberately scans actual locations, so per-move fsync is
+        # unnecessary. Phase boundaries and final completion always sync.
+        if event.get('type') in ('plan','state') or self.pending>=128 or time.monotonic()-self.synced>=.25:
+            self.sync()
 
-    def close(self):self.stream.close()
+    def sync(self):
+        os.fsync(self.stream.fileno());self.pending=0;self.synced=time.monotonic()
+
+    def close(self):
+        try:
+            if self.pending:self.sync()
+        finally:self.stream.close()
 
 
 def load_journal(path):
