@@ -125,3 +125,39 @@ def test_interrupted_journal_recovers_by_actual_identity(tmp_path):
     assert rename.recover(journal)==[source]
     assert source.read_text()=='keep' and not temp.exists()
     assert rename.load_journal(journal)[1]=='rolled_back'
+
+
+def test_durable_plan_precedes_moves_and_completion_sync_follows_them(tmp_path,monkeypatch):
+    from dragshift import bulk_rename as rename
+    import os
+    paths=fixtures(tmp_path);plan=rename.preview(paths,[Rule('insert',{'text':'new_'})])
+    events=[];native_move=rename.move_exclusive;native_sync=os.fsync
+    def sync(fd):events.append('sync');native_sync(fd)
+    def move(source,target):
+        assert 'sync' in events
+        events.append('move');native_move(source,target)
+    monkeypatch.setattr(rename.os,'fsync',sync);monkeypatch.setattr(rename,'move_exclusive',move)
+    result=rename.execute(plan,tmp_path/'journals')
+    assert events[0]=='sync' and events[-1]=='sync'
+    assert events.count('move')==len(paths)*2
+    assert events.count('sync')<events.count('move')
+    assert rename.load_journal(result.journal)[1]=='applied'
+
+
+def test_swap_recovery_survives_missing_group_of_move_records(tmp_path):
+    from dragshift import bulk_rename as rename
+    import json
+    a,b=tmp_path/'a.txt',tmp_path/'b.txt';a.write_text('A');b.write_text('B')
+    items=[]
+    for index,(source,target) in enumerate(((a,b),(b,a))):
+        items.append(dict(source=str(source),target=str(target),temporary=str(tmp_path/f'.~rename-lost-group-{index}'),
+                          fingerprint=rename.fingerprint(source),location='source'))
+    journal=tmp_path/'lost-group.jsonl'
+    journal.write_text(json.dumps(dict(type='plan',version=1,entries=items))+'\n',encoding='utf-8')
+    for item in items:rename.move_exclusive(item['source'],item['temporary'])
+    rename.move_exclusive(items[0]['temporary'],items[0]['target'])
+    # The durable plan exists, but none of these moves reached stable storage
+    # in the log. File identities still resolve a partly committed name swap.
+    rename.recover(journal)
+    assert a.read_text()=='A' and b.read_text()=='B'
+    assert not list(tmp_path.glob('.~rename-*'))
