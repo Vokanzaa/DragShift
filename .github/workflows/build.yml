@@ -17,6 +17,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: dragshift-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   windows:
     if: ${{ !inputs.mac_intel_only }}
@@ -245,7 +249,7 @@ jobs:
           mkdir -p dmg
           cp -R dist/DragShift.app dmg/
           ln -s /Applications dmg/Applications
-          hdiutil create -volname "DragShift" -srcfolder dmg -ov -format UDZO "dist/DragShift-mac-${{ matrix.arch }}.dmg"
+          python packaging/macos_dmg.py --source dmg --volume "DragShift" --output "dist/DragShift-mac-${{ matrix.arch }}.dmg"
           du -h "dist/DragShift-mac-${{ matrix.arch }}.dmg"
           if [ "$SIGNED" = "1" ]; then
             codesign --force --timestamp --sign "${{ secrets.MACOS_SIGN_IDENTITY }}" "dist/DragShift-mac-${{ matrix.arch }}.dmg"
