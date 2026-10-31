@@ -94,6 +94,14 @@ Large print rasters use tifffile (BSD-3-Clause) for strip-based TIFF/BigTIFF
 containers: https://github.com/cgohlke/tifffile. Deflate strips use Python's
 standard-library zlib; no optional imagecodecs runtime is required.
 
+Bulk filename rules use AnyAscii (ISC) for transliteration and regex
+(Apache-2.0 AND CNRI-Python) for regular expressions with execution timeouts.
+Complete licenses are bundled as `dragshift/assets/anyascii-LICENSE.txt` and
+`dragshift/assets/regex-LICENSE.txt`.
+Sources: https://github.com/anyascii/anyascii and https://github.com/mrabarnett/mrab-regex .
+Filename-rule functionality is independently implemented; no proprietary
+renaming application code or assets are included.
+
 PySide6 / Qt (LGPLv3), PyMuPDF (AGPLv3), Pillow (HPND), pillow-heif, NumPy,
 python-docx and pywin32 retain their respective upstream licenses. Their versions
 are recorded in requirements-windows-lock.txt. PyInstaller also collects package
