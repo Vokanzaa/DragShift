@@ -156,7 +156,7 @@ def test_required_capability_gate_covers_audio_video_and_melt_recipes(monkeypatc
     required = module.required_capabilities()
     assert set(audio.AUDIO_ENCODERS.values()) <= required['ffmpeg']['encoders']
     assert {'libx264', 'libvpx-vp9', 'mpeg4', 'gif', 'png'} <= required['ffmpeg']['encoders']
-    assert {'amix', 'asetnsamples', 'asplit', 'volume', 'acrusher'} <= required['ffmpeg']['filters']
+    assert {'amix', 'asetnsamples', 'asplit', 'volume', 'acrusher', 'asendcmd', 'rubberband', 'asoftclip'} <= required['ffmpeg']['filters']
     assert {'scale', 'fps', 'setsar', 'tpad', 'trim', 'concat', 'pad'} <= required['ffgac']['filters']
     monkeypatch.setattr(audio, 'engine_capabilities', lambda kind, name='ffmpeg': required[name][kind])
     assert module.check_media_capabilities('ffmpeg')
