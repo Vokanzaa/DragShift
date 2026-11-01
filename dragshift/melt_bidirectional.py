@@ -35,7 +35,7 @@ def reverse_range(source, start, count, *, fps, width, height, folder, name):
         video.check_cancel()
         begin=max(0,end-per_chunk)
         length=end-begin
-        part=folder/f'{name}-{len(parts):05d}.mkv'
+        part=folder/f'{name}-{len(parts):05d}.nut'
         vf=(video.square_pixels_filter()+f',fps={fps},'
             f'scale={width}:{height}:force_original_aspect_ratio=decrease,'
             f'pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p,'
@@ -43,15 +43,20 @@ def reverse_range(source, start, count, *, fps, width, height, folder, name):
         args=video.ffmpeg_args()+['-ss',f'{start+begin/fps:.10f}',
             *video.input_options(source),'-i',str(video.local_file(source)),
             '-map','0:v:0','-an','-vf',vf,'-frames:v',str(length),'-c:v','ffv1',
-            '-threads','2',str(part)]
+            '-fps_mode','passthrough','-threads','2',str(part)]
         video.run_process(args,length/fps,'Preparing reverse Melt excerpt…',parse_progress=True)
-        parts.append(part)
+        parts.append((part,length))
         end=begin
     manifest=folder/f'{name}.ffconcat'
-    manifest.write_text('ffconcat version 1.0\n'+''.join(f"file '{part.name}'\n" for part in parts),encoding='ascii')
-    result=folder/f'{name}.mkv'
+    manifest.write_text('ffconcat version 1.0\n'+''.join(
+        f"file '{part.name}'\nduration {length/fps:.12f}\n" for part,length in parts),encoding='ascii')
+    # Matroska rounds short fragment clocks to milliseconds. NUT retains their
+    # fine-grained timebase; reset the global clock when losslessly joining so
+    # concat duration rounding cannot accumulate gaps or boundary-frame drops.
+    result=folder/f'{name}.nut'
+    timing=f'setts=pts=N/({fps}*TB):dts=N/({fps}*TB):duration=1/({fps}*TB)'
     video.run_process(video.ffmpeg_args()+['-f','concat','-safe','0','-i',str(manifest),
-        '-map','0:v:0','-an','-c:v','copy',str(result)],count/fps,'Joining reverse excerpt…')
+        '-map','0:v:0','-an','-c:v','copy','-bsf:v',timing,str(result)],count/fps,'Joining reverse excerpt…')
     return result
 
 
@@ -112,13 +117,14 @@ def render(timeline, *, max_side=720, fps=30, audio=True, directory=None):
                     backward=classic_render(reverse_model,max_side=max_side,fps=fps,audio=False,directory=part_folder)[0]
                     restored=reverse_range(backward,0,left_count+right_count,fps=fps,width=width,height=height,folder=part_folder,name='restored')
                     count=lead+recovery
-                    segment=part_folder/'handoff.mkv'
+                    segment=part_folder/'handoff.nut'
                     graph=(f'[0:v]trim=start_frame={boundary-lead}:end_frame={boundary+recovery},setpts=N/({fps}*TB)[forward];'
                            f'[1:v]trim=start_frame={left_count-lead}:end_frame={left_count+recovery},setpts=N/({fps}*TB)[backward];'
                            +_mask(width,height,fps,count)+';[forward][backward][mask]maskedmerge,format=yuv420p[v]')
                     video.run_process(video.ffmpeg_args()+['-i',str(base),'-i',str(restored),
                         '-filter_complex_threads','2','-filter_complex',graph,'-map','[v]','-an',
-                        '-frames:v',str(count),'-c:v','ffv1','-threads','2',str(segment)],count/fps,'Combining forward and reverse Melt…')
+                        '-frames:v',str(count),'-c:v','ffv1','-fps_mode','passthrough',
+                        '-threads','2',str(segment)],count/fps,'Combining forward and reverse Melt…')
                     replacements.append((boundary-lead,boundary+recovery,segment))
             inputs=['-i',str(base)]
             for _,_,path in replacements:inputs+=['-i',str(path)]
@@ -135,10 +141,12 @@ def render(timeline, *, max_side=720, fps=30, audio=True, directory=None):
             if position<total:
                 graph.append(f'[0:v]trim=start_frame={position}:end_frame={total},setpts=N/({fps}*TB)[tail]')
                 labels.append('[tail]')
-            graph.append(''.join(labels)+f'concat=n={len(labels)}:v=1:a=0[v]')
+            graph.append(''.join(labels)+f'concat=n={len(labels)}:v=1:a=0[joined];[joined]setpts=N/({fps}*TB)[v]')
             args=video.ffmpeg_args()+inputs+['-filter_complex_threads','2','-filter_complex',';'.join(graph),'-map','[v]']
             args+=['-map','0:a:0?'] if audio else ['-an']
-            args+=video._video_codec('MP4')+['-c:a','copy','-t',str(total/fps),str(output)]
+            args+=['-fps_mode','passthrough','-enc_time_base:v','1:1000000']
+            args+=video._video_codec('MP4')+['-bf','0','-bsf:v',f'setts=duration=1000000/{fps}',
+                '-c:a','copy','-t',str(total/fps),str(output)]
             with _progress(.85,.15):
                 video.run_process(args,total/fps,'Exporting smooth Melt…')
     return outs

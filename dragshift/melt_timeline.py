@@ -212,6 +212,8 @@ def render(timeline, *, max_side=720, fps=30, audio=True, directory=None):
             args = video.ffmpeg_args()+['-fflags','+genpts','-r',str(fps),'-i',str(moshed)]+inputs+[
                 '-filter_complex_threads','2','-filter_complex',';'.join(graph),'-map','[v]']
             args += ['-map','[audio]'] if has_audio else ['-an']
-            args += video._video_codec('MP4')+['-t',str(total),str(result)]
+            args += ['-fps_mode','passthrough','-enc_time_base:v','1:1000000']
+            args += video._video_codec('MP4')+['-bf','0','-bsf:v',f'setts=duration=1000000/{fps}',
+                '-t',str(total),str(result)]
             video.run_process(args,total,'4/4 · Exporting playable MP4…',.6,.4)
     return outs

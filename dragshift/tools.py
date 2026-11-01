@@ -598,7 +598,7 @@ class AddBgWindow(ToolWindow):
 
     def showEvent(self, e):
         super().showEvent(e)
-        QTimer.singleShot(0, self.render)
+        self._timer.start(0)
 
     def reset(self):
         self.pad.setValue(12); self.rad.setValue(24); self.sha.setValue(50); self.ang.setValue(135)
@@ -1081,7 +1081,7 @@ class EditWindow(ToolWindow):
 
     def showEvent(self, e):
         super().showEvent(e)
-        QTimer.singleShot(0, self.render)
+        self._timer.start(0)
 
     def reset(self):
         for s in self.sl.values():
