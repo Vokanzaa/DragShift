@@ -54,3 +54,18 @@ def test_invert_gif_preserves_all_frames_and_delays(tmp_path):
         image.seek(1)
         assert image.convert('RGB').getpixel((0,0))==(255,255,0)
         assert image.info['duration']==170
+
+
+@pytest.mark.parametrize('editor',[tools.EditWindow,tools.AddBgWindow])
+def test_closing_before_queued_preview_does_not_access_deleted_controls(qt_session,tmp_path,monkeypatch,editor):
+    import sys
+    from PySide6.QtCore import QCoreApplication,QEvent
+    source=tmp_path/'selected.png';Image.new('RGB',(80,60),'red').save(source)
+    errors=[]
+    monkeypatch.setattr(sys,'excepthook',lambda kind,error,tb:errors.append(str(error)))
+    for _ in range(3):
+        window=editor([source],lambda *_:None)
+        window.show();window.close()
+        QCoreApplication.sendPostedEvents(None,QEvent.DeferredDelete)
+        qt_session.processEvents()
+    assert not errors

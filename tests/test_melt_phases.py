@@ -54,12 +54,17 @@ def hashes(path):
     return [line.rsplit(',',1)[-1].strip() for line in data.decode().splitlines() if line and not line.startswith('#')]
 
 
-def test_chunked_reverse_is_lossless_in_exact_reverse_order(clips,tmp_path,monkeypatch):
+@pytest.mark.parametrize('chunk_size',[7,19])
+@pytest.mark.parametrize('start_frame,count',[(0,60),(7,32)])
+def test_chunked_reverse_is_lossless_in_exact_reverse_order(clips,tmp_path,monkeypatch,chunk_size,start_frame,count):
     from dragshift import melt_bidirectional as module
-    monkeypatch.setattr(module,'REVERSE_MEMORY',160*120*4*7)
-    output=module.reverse_range(clips[0],0,60,fps=30,width=160,height=120,folder=tmp_path,name='reversed')
-    assert hashes(output)==list(reversed(hashes(clips[0])))
-    assert len(list(tmp_path.glob('reversed-*.mkv')))==9
+    monkeypatch.setattr(module,'REVERSE_MEMORY',160*120*4*chunk_size)
+    output=module.reverse_range(clips[0],start_frame/30,count,fps=30,width=160,height=120,folder=tmp_path,name='reversed')
+    assert hashes(output)==hashes(clips[0])[start_frame:start_frame+count][::-1]
+    assert len(list(tmp_path.glob('reversed-*.nut')))==(count+chunk_size-1)//chunk_size
+    packets=json.loads(video.capture([video.executable('ffprobe'),'-v','error','-select_streams','v:0',
+        '-show_packets','-show_entries','packet=pts_time','-of','json',str(output)]))['packets']
+    assert [float(packet['pts_time']) for packet in packets]==pytest.approx([index/30 for index in range(count)],abs=.000002)
 
 
 def test_bidirectional_render_preserves_duration_audio_and_uses_only_binary_wet_handoff(clips,monkeypatch):
