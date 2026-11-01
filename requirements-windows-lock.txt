@@ -1,4 +1,6 @@
 altgraph==0.17.5
+anyascii==0.3.3
+regex==2026.9.29
 certifi==2026.10.23
 colorama==0.4.6
 flatbuffers==25.12.19

@@ -1,7 +1,7 @@
 """Frame-aware image exports. Pillow composites GIF disposal before each edit."""
 from pathlib import Path
 from functools import reduce
-from math import gcd,ceil
+from math import gcd,ceil,isfinite
 
 from PIL import Image, ImageOps
 
@@ -59,7 +59,7 @@ def is_animated(src):
         return getattr(image, 'is_animated', False)
 
 
-def transform_image(src, label, transform=lambda image: image, *, target=None, quality=90):
+def transform_image(src, label, transform=lambda image: image, *, target=None, quality=90, reverse_frames=False):
     from .convert import PIL_FORMAT, atomic_save, open_image, save_image
     from .video import check_cancel
 
@@ -83,7 +83,12 @@ def transform_image(src, label, transform=lambda image: image, *, target=None, q
             if pixels > 250_000_000:
                 raise UserError('This animation is too large for image editing. Convert it to video first.')
             frames.append(frame)
-            durations.append(max(10, int(source.info.get('duration', 100))))
+            delay=float(source.info.get('duration',100))
+            if not isfinite(delay) or delay<0:raise UserError('This animation has invalid frame durations.')
+            durations.append(max(.001,delay) if target=='PNG' else max(10,round(delay/10)*10) if target=='GIF' else max(1,round(delay)))
+    if reverse_frames:
+        frames.reverse()
+        durations.reverse()
     options = dict(save_all=True, append_images=frames[1:], duration=durations)
     if loop is not None:
         options['loop'] = loop
@@ -92,5 +97,9 @@ def transform_image(src, label, transform=lambda image: image, *, target=None, q
         options.update(disposal=2, optimize=False)
     elif target == 'WEBP':
         options.update(quality=quality, method=4)
-    atomic_save(lambda dst: frames[0].save(dst, PIL_FORMAT[target], **options), out)
+        if reverse_frames:options['lossless']=True
+    def write(dst):
+        frames[0].save(dst, PIL_FORMAT[target], **options)
+        check_cancel()
+    atomic_save(write, out)
     return out

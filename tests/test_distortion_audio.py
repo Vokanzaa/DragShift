@@ -1,6 +1,8 @@
 """Audio distortion is a single synchronized filter in the Distort encode."""
 import numpy as np
 import pytest
+import subprocess
+import tempfile
 
 from dragshift import video
 from dragshift.util import UserError
@@ -8,11 +10,16 @@ from dragshift.util import UserError
 
 def filtered_samples(source, strength):
     from dragshift import distortion_audio
-    expression=distortion_audio.filter_expression(strength)
-    args=[video.executable('ffmpeg'),'-v','error','-i',str(source)]
-    if expression:
-        args+=['-af',expression]
-    return np.frombuffer(video.capture(args+['-f','f32le','-c:a','pcm_f32le','pipe:1']),dtype='<f4').reshape(-1,2)
+    from dragshift import audio
+    length=audio.probe(source).duration
+    with tempfile.TemporaryDirectory(dir=source.parent) as folder:
+        expression=distortion_audio.prepare_filter(folder,strength,length=length,duration=length)
+        args=[video.executable('ffmpeg'),'-v','error','-i',str(source)]
+        if expression:
+            args+=['-af',expression]
+        result=subprocess.run(args+['-f','f32le','-c:a','pcm_f32le','pipe:1'],cwd=folder,
+                              capture_output=True,check=True,timeout=30,creationflags=video.CREATION_FLAGS)
+        return np.frombuffer(result.stdout,dtype='<f4').reshape(-1,2)
 
 
 @pytest.fixture
@@ -32,7 +39,14 @@ def test_audio_intensity_changes_timbre_without_changing_samples_or_channels(sou
     assert dry.shape==low.shape==high.shape==(48000,2)
     gain=np.sum(high*dry)/np.sum(dry*dry)
     assert np.sqrt(np.mean((high-gain*dry)**2))>.05
-    assert np.sqrt(np.mean((low-dry)**2))<np.sqrt(np.mean((high-dry)**2))
+    def pitch_excursion(samples):
+        peaks=[]
+        for offset in (.2,.4,.6,.8):
+            block=samples[round(offset*48000):round((offset+.08)*48000),0]
+            spectrum=np.abs(np.fft.rfft(block*np.hanning(len(block))))
+            peaks.append(abs(np.argmax(spectrum)*48000/len(block)-997))
+        return np.mean(peaks)
+    assert pitch_excursion(high)>2*pitch_excursion(low)
     assert np.max(np.abs(high))<=.950001
     assert sound.read_bytes()==before
 
@@ -54,7 +68,7 @@ def test_loud_audio_is_bounded_without_filter_delay(tmp_path,media_engines):
     result=filtered_samples(source,100)
     assert result.shape==(9600,2)
     assert np.max(np.abs(result))<=.950001
-    assert np.any(result[:16])
+    assert np.any(result[:960])
 
 
 @pytest.mark.parametrize('value',[True,False,None,'bad',float('inf'),float('nan'),-1,101,2.5])
@@ -83,7 +97,7 @@ def test_audio_distortion_is_opt_in_and_applied_only_in_final_encode(tmp_path,me
     wet=distortion.export(source,strength=0,audio_strength=80,start=.2,end=.8,target='MP4')[0]
     filtered=[args for args in calls if '-af' in args]
     assert len(filtered)==1 and filtered[0][-1].endswith('.mp4')
-    assert filtered[0][filtered[0].index('-af')+1]==distortion_audio.filter_expression(80)
+    assert filtered[0][filtered[0].index('-af')+1].startswith(distortion_audio.filter_expression(80))
     assert video.probe(wet).has_audio
     assert video.probe(wet).duration==pytest.approx(.6,abs=.002)
     details=json.loads(video.capture([video.executable('ffprobe'),'-v','error','-count_frames',

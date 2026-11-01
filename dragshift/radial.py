@@ -228,6 +228,7 @@ class RadialMenu(QWidget):
             self.update()
 
     def _load(self, paths: list[str]):
+        self.raw_paths=list(paths)
         paths = resolve_shortcuts(paths)
         self.paths = paths
         self.rings = {k: v for k, v in self.build_rings(paths).items() if v}
@@ -358,7 +359,8 @@ class RadialMenu(QWidget):
         items = self.items
         # The final OLE payload is authoritative. A cached dragEnter payload can
         # belong to an earlier drag; never dispatch it after the file is released.
-        paths = resolve_shortcuts(self._local_paths(e.mimeData()))
+        raw_paths = self._local_paths(e.mimeData())
+        paths = resolve_shortcuts(raw_paths)
         item = items[idx] if 0 <= idx < len(items) else None
         if item and paths:
             available = [candidate for ring in self.build_rings(paths).values() for candidate in ring]
@@ -368,7 +370,7 @@ class RadialMenu(QWidget):
                 return
             e.setDropAction(Qt.CopyAction)
             e.accept()
-            paths = list(paths)
+            paths = list(raw_paths if item.key=='tool:Rename' else paths)
             self.hide()
             # return to Explorer's drag loop immediately; do the work after
             QTimer.singleShot(0, lambda: self.activated.emit(item, paths))
@@ -392,6 +394,7 @@ class RadialMenu(QWidget):
             self.next_ring()
         elif 0 <= idx < len(self.items):
             item, paths = self.items[idx], list(self.paths)
+            if item.key=='tool:Rename':paths=list(self.raw_paths)
             self.hide()
             QTimer.singleShot(0, lambda: self.activated.emit(item, paths))
         else:

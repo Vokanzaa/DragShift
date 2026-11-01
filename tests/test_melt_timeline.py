@@ -158,9 +158,9 @@ def test_timeline_ui_trims_splits_drags_and_keeps_each_cut_independent(sources,q
     panel.select('cut',0)
     panel.duration.setValue(.3)
     panel.save(preview=True)
-    assert calls and calls[0][0]=='tool:Datamosh' and len(calls[0][1])==2
-    info=video.probe(calls[0][2]()[0])
-    assert info.duration<3 and info.has_audio
+    wait(lambda:not panel.effect_preview.busy and bool(panel.effect_preview.frames))
+    assert not calls and not panel.effect_preview.image.pixmap().isNull()
+    assert panel.effect_preview.frames[-1][0]<3
     window.resize(800,700)
     qt_session.processEvents()
     assert window.height()<=700

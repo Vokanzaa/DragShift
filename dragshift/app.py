@@ -272,11 +272,12 @@ class DragShiftApp(QObject):
 
     def build_rings(self, paths: list[str]) -> dict[str, list[Item]]:
         pack = Item("Pack", "▣", key="tool:Pack", hint="Create one ZIP or 7Z archive")
+        rename = Item('Rename','Aa',key='tool:Rename',hint='Batch naming rules · preview · undo')
         if Path(paths[0]).suffix.lower() == '.dshift-print':
-            return {"Tools": [Item('Interlace', GLYPHS['Interlace'], key='tool:Interlace', hint=HINTS['Interlace']), pack]}
+            return {"Tools": [Item('Interlace', GLYPHS['Interlace'], key='tool:Interlace', hint=HINTS['Interlace']), pack, rename]}
         cat = None if Path(paths[0]).is_dir() else category(paths[0])
         if cat is None:
-            return {"Tools": [pack]}
+            return {"Tools": [pack,rename]}
         ext = Path(paths[0]).suffix
         same = [p for p in paths if category(p) == cat]
         convert_items = []
@@ -311,11 +312,22 @@ class DragShiftApp(QObject):
         elif cat == "archive":
             rings["Tools"] = [Item("Extract", "⇩", key="tool:Extract archive", hint="Unpack to a new folder"),
                                Item("Contents", "ⓘ", key="tool:Contents", hint="View files inside")]
+        if cat in ('image','video'):
+            from . import animation
+            try:animated=cat=='video' or animation.is_animated(paths[0])
+            except (OSError,ValueError):animated=Path(paths[0]).suffix.lower()=='.gif'
+            if animated:
+                rings.setdefault('Tools',[]).append(Item('Reverse','↶',key='tool:Reverse',hint='Reverse all frames and their timing'))
         rings.setdefault("Tools", []).append(pack)
+        rings['Tools'].append(rename)
         return rings
 
     # ------------------------------------------------------------ actions
     def run_item(self, item: Item, paths: list[str]):
+        if item.key=='tool:Rename':
+            from .rename_tools import BulkRenameWindow
+            self.open_window(BulkRenameWindow(paths,self.notify))
+            return
         if item.key == 'tool:Interlace':
             from .lenticular_tools import LenticularWindow
             self.open_window(LenticularWindow(paths, self.notify))
@@ -327,6 +339,10 @@ class DragShiftApp(QObject):
         cat = category(paths[0])
         paths = [p for p in paths if category(p) == cat]
         kind, name = item.key.split(":", 1)
+        if name=='Reverse' and cat in ('image','video'):
+            from . import media_reverse
+            self.submit('tool:Reverse',paths,lambda:video.batch(paths,media_reverse.reverse),'Reversing frames…')
+            return
         if name == 'Distort':
             from .distortion_tools import DistortionWindow
             self.open_window(DistortionWindow(paths,self.notify))

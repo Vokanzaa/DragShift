@@ -598,7 +598,7 @@ class AddBgWindow(ToolWindow):
 
     def showEvent(self, e):
         super().showEvent(e)
-        QTimer.singleShot(0, self.render)
+        self._timer.start(0)
 
     def reset(self):
         self.pad.setValue(12); self.rad.setValue(24); self.sha.setValue(50); self.ang.setValue(135)
@@ -1009,6 +1009,12 @@ class EditWindow(ToolWindow):
         self.gray.setCheckable(True)
         self.gray.toggled.connect(lambda _: self._timer.start())
         row.addWidget(self.gray)
+        self.invert = QPushButton(tr('Invert colours'))
+        self.invert.setCheckable(True)
+        self.invert.setAccessibleName(tr('Invert colours'))
+        self.invert.setToolTip(tr('Invert RGB colours and preserve transparency. Applies to every selected image and animated frame.'))
+        self.invert.toggled.connect(lambda _: self._timer.start())
+        row.addWidget(self.invert)
         row.addStretch(1)
         cmp_btn = QPushButton(tr("Hold to compare"))
         cmp_btn.pressed.connect(lambda: self._compare(True))
@@ -1058,6 +1064,7 @@ class EditWindow(ToolWindow):
         a.sharpness = 1 + self.sl["sharpness"].value() / 50
         a.warmth = self.sl["warmth"].value() / 100
         a.grayscale = self.gray.isChecked()
+        a.invert = self.invert.isChecked()
         a.resize_pct = self.size_sl.value() if resize else 100
         return a
 
@@ -1074,13 +1081,14 @@ class EditWindow(ToolWindow):
 
     def showEvent(self, e):
         super().showEvent(e)
-        QTimer.singleShot(0, self.render)
+        self._timer.start(0)
 
     def reset(self):
         for s in self.sl.values():
             s.setValue(0)
         self.size_sl.setValue(100)
         self.gray.setChecked(False)
+        self.invert.setChecked(False)
         self.adj = imaging.Adjust()
         self._size_label()
         self.render()
@@ -1093,6 +1101,8 @@ class EditWindow(ToolWindow):
             bits.append("flipped")
         if self.gray.isChecked():
             bits.append("B&W")
+        if self.invert.isChecked():
+            bits.append('Inverted colours')
         return ", ".join(bits[:4])
 
     def save(self):

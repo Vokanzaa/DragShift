@@ -333,6 +333,8 @@ def selftest():
             _check_gif_sequence(base)
             _check_updates(base)
             _check_file_drag_guard(base)
+            from .shared_checks import check as check_shared
+            check_shared(base)
             source = base / "archive.zip"
             with zipfile.ZipFile(source, "w") as z:
                 z.writestr("folder/hello.txt", "DragShift test")

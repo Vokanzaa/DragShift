@@ -310,7 +310,8 @@ def _render(src,info,result,start,end,strength,max_side,target,curve=None,audio_
             args=video.ffmpeg_args()+['-f','concat','-safe','0','-i',str(manifest)]
             if info.has_audio and keep_audio:
                 args+=['-ss',str(start),'-t',str(end-start),'-i',str(video.local_file(src)), '-map','0:v:0','-map','1:a:0']
-                expression=distortion_audio.filter_expression(audio_strength)
+                expression=distortion_audio.prepare_filter(folder,audio_strength,start=start,
+                    length=end-start,duration=info.duration,curve=curve)
                 if expression:
                     args+=['-af',expression]
             else:
@@ -328,7 +329,7 @@ def _render(src,info,result,start,end,strength,max_side,target,curve=None,audio_
             else:
                 rate=info.fps
             args+=['-vf',vf,'-r',f'{rate:.8f}',*(['-fps_mode','cfr'] if info.image else []),'-t',str(end-start),*codec,str(result)]
-            video.run_process(args,end-start,'Encoding distorted animation…',.8,.2)
+            video.run_process(args,end-start,'Encoding distorted animation…',.8,.2,cwd=folder)
 
 
 def _warp_frames(frames,warped,folder,w,h,strength,*,strengths=None):

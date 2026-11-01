@@ -1,12 +1,14 @@
 # DragShift — local file tools
 
-## Custom build 1.1.0+files.14
+## Custom build 1.1.0+files.15
 
 **Install:** [Windows installer](https://github.com/Vokanzaa/DragShift/releases/latest/download/DragShift-Setup.exe) · [all desktop packages and release version](https://github.com/Vokanzaa/DragShift/releases/latest).
 
 **Source:** [main branch](https://github.com/Vokanzaa/DragShift/tree/main) · [source ZIP](https://github.com/Vokanzaa/DragShift/archive/refs/heads/main.zip). Source downloads contain code; choose a packaged application above to install and use it. While a new release is building, main can be newer than the published package. The release page identifies the packaged version.
 
-New in files.14: background update notifications, release history, cancellable verified downloads and native installation from this fork. Installed Windows builds update and restart through the existing installer, preserving preferences and actual integration tasks.
+New in files.15: previewed bulk renaming with rules and undo; image colour inversion; frame reversal for animations and video; gentle synchronized pitch waves in Distort; actual Melt transition previews, breakdown/recovery controls and optional experimental reverse recovery. These shared tools also ship in Swipe4Rest 0.1.1. See [usage and limits](docs/shared-tools.md).
+
+Files.14 added background update notifications, release history, cancellable verified downloads and native installation from this fork. Installed Windows builds update and restart through the existing installer, preserving preferences and actual integration tasks.
 
 New in files.13: selecting several images and choosing GIF opens one animation builder, with natural numeric filename order, modification date oldest first, original addition order, manual reordering, reverse, 1–100 fps and optional looping. It writes one animated GIF containing every selected frame. Files.12 validates the global mouse gesture against a real file drag; plain Shift, typing, text drags and drawing stay in the active app. The explicit multi-file Explorer selection shortcut remains available. Files.11 added shared settings across the complete selected image series. Releases are published only after the complete native desktop build matrix succeeds.
 

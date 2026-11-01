@@ -11,8 +11,10 @@ export function glitch_frame(frame) {
     const active = options.ranges ? options.ranges.find(r => n >= r.start && n < r.end) : options;
     if (!vectors || !active || n < active.start || n >= active.end) return;
     frame.mv.overflow = "truncate";
-    const amount = active.strength / 100;
-    const phase = (n - active.start) / Math.max(1, active.end - active.start);
+    const cut = active.cut ?? active.start;
+    const attack = n < cut ? (n - active.start) / Math.max(1, cut - active.start) : 1;
+    const amount = active.strength / 100 * attack * attack * (3 - 2 * attack);
+    const phase = Math.max(0, (n - cut) / Math.max(1, active.end - cut));
     const envelope = Math.sin(Math.PI * Math.min(.98, phase + .1));
     for (let y = 0; y < vectors.length; y++) {
         const row = vectors[y];
