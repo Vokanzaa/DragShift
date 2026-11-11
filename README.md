@@ -1,12 +1,14 @@
 # DragShift — local file tools
 
-## Custom build 1.1.0+files.15
+## Custom build 1.1.0+files.16
 
 **Install:** [Windows installer](https://github.com/Vokanzaa/DragShift/releases/latest/download/DragShift-Setup.exe) · [all desktop packages and release version](https://github.com/Vokanzaa/DragShift/releases/latest).
 
 **Source:** [main branch](https://github.com/Vokanzaa/DragShift/tree/main) · [source ZIP](https://github.com/Vokanzaa/DragShift/archive/refs/heads/main.zip). Source downloads contain code; choose a packaged application above to install and use it. While a new release is building, main can be newer than the published package. The release page identifies the packaged version.
 
-New in files.15: previewed bulk renaming with rules and undo; image colour inversion; frame reversal for animations and video; gentle synchronized pitch waves in Distort; actual Melt transition previews, breakdown/recovery controls and optional experimental reverse recovery. These shared tools also ship in Swipe4Rest 0.1.1. See [usage and limits](docs/shared-tools.md).
+New in files.16: select a square on a still image and export a 100×100 WebP Telegram emoji. Video and GIF emoji export uses WebM.
+
+Files.15 added previewed bulk renaming with rules and undo, colour inversion, frame reversal, synchronized pitch waves in Distort and rendered Melt transition previews. See [usage and limits](docs/shared-tools.md).
 
 Files.14 added background update notifications, release history, cancellable verified downloads and native installation from this fork. Installed Windows builds update and restart through the existing installer, preserving preferences and actual integration tasks.
 
@@ -134,6 +136,8 @@ Drop media into the tool to replace its source. Batch settings use each file's f
 Independent frame jobs use up to eight bounded workers for canvases no larger than 640 px, reserving two logical CPUs; larger canvases retain the previous four-worker/half-CPU limit. Lossless intermediate PNG compression stays enabled. Cancellation stops and joins active engines before removing temporary frames. Preview reuses its decoded source when only strength changes. On this Windows PC, the same 40-second moving synthetic clip (1200 frames, 640×360, strength 40) exported in **78.24 s**, versus **94.90 s** before this change: **17.6% less time**. All processed/encoded frame pixels, timestamps and dry audio matched; sampled peak memory increased from about **173 to 310 MB**. This is one benchmark, not a promised speed on every computer or equivalence with a hosted bot.
 
 ### Telegram custom emoji
+
+For a still image, choose **Convert → TG Emoji**. Drag the square or resize it with its edges and corners. The selected area is saved as a transparent-capable 100×100 WebP. [Telegram static emoji requirements](https://core.telegram.org/stickers#static-stickers-and-emoji).
 
 For GIF or video, choose **Convert → TG Emoji**. Select a segment up to three seconds using the range handles or numeric fields, then choose full-frame fit with transparent padding or a square centre crop. The export uses **WebM / VP9, exactly 100×100, no audio stream, at most 30 fps and 256,000 bytes**. Encoding retries at smaller quality when necessary and verifies the resulting streams, dimensions, duration, fps and size before publishing the file. The segment is preserved as animation; Telegram recommends choosing a seamless loop. [Official requirements](https://core.telegram.org/stickers/webm-vp9-encoding).
 
