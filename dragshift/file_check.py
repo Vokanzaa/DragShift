@@ -322,6 +322,23 @@ def selftest():
             assert .55<video.probe(animated_video).duration<.65
             emoji=telegram.export_emoji(gif)[0]
             assert telegram.validate_export(emoji).width==100
+            from .telegram_tools import emoji_window
+            still = base / 'emoji.png'
+            picture = Image.new('RGBA', (300, 100), 'red')
+            picture.paste((0, 0, 255, 255), (200, 0, 275, 100))
+            picture.paste((0, 0, 0, 0), (275, 0, 300, 100))
+            picture.save(still)
+            saved = []
+            editor = emoji_window([still], lambda action, sources, outputs, extra: saved.extend(outputs))
+            editor.show()
+            QApplication.processEvents()
+            editor.horizontal.setValue(100)
+            editor.primary_btn.click()
+            assert len(saved) == 1 and saved[0].suffix == '.webp'
+            with Image.open(saved[0]) as emoji:
+                assert emoji.size == (100, 100) and emoji.format == 'WEBP'
+                assert emoji.getpixel((25, 50)) == (0, 0, 255, 255)
+                assert emoji.getpixel((90, 50))[3] == 0
             distorted=distortion.export(gif,strength=60,target='GIF')[0]
             with Image.open(distorted) as image:
                 assert image.n_frames==2 and image.size==(80,60)
