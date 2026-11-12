@@ -1,0 +1,308 @@
+[   0.01] macOS 26.7.2 screen (1024, 768)
+[  12.83] icon positions (screen): {'D-Photo.jpg': (140, 148), 'D-Report.pdf': (140, 263), 'D-Appendix.pdf': (140, 378), 'D-Letter.docx': (140, 493), 'D-Graphic.png': (140, 608)}
+[  13.04] measured blob offset (not applied): -1 -34
+[  39.08] Traceback (most recent call last):
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 292, in run
+    raise AssertionError("no output file appeared")
+AssertionError: no output file appeared
+
+[  39.19] FAIL JPG → PNG                       24.1s  AssertionError: no output file appeared
+[  39.31] osascript error: 29:91: execution error: Finder got an error: Can’t set item "D-Photo.jpg" of Finder window id 33 to {80, 60}. (-10006)
+[  40.51] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Photo.jpg" of Finder window id 33. (-1728)
+[  40.51] no position for D-Photo.jpg ''
+[  40.76] icon positions (screen): {'D-Report.pdf': (140, 263), 'D-Appendix.pdf': (140, 378), 'D-Letter.docx': (140, 493), 'D-Graphic.png': (140, 608)}
+[  41.34] Traceback (most recent call last):
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 253, in run
+    x, y = icon_center(files[-1], POS)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 163, in icon_center
+    x, y = pos[name]
+           ~~~^^^^^^
+KeyError: 'D-Photo.jpg'
+
+[  41.42] FAIL JPG → WEBP                       0.1s  KeyError: 'D-Photo.jpg'
+[  41.50] osascript error: 29:91: execution error: Finder got an error: Can’t set item "D-Photo.jpg" of Finder window id 33 to {80, 60}. (-10006)
+[  42.76] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Photo.jpg" of Finder window id 33. (-1728)
+[  42.76] no position for D-Photo.jpg ''
+[  43.04] icon positions (screen): {'D-Report.pdf': (140, 263), 'D-Appendix.pdf': (140, 378), 'D-Letter.docx': (140, 493), 'D-Graphic.png': (140, 608)}
+[  43.61] Traceback (most recent call last):
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 253, in run
+    x, y = icon_center(files[-1], POS)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 163, in icon_center
+    x, y = pos[name]
+           ~~~^^^^^^
+KeyError: 'D-Photo.jpg'
+
+[  43.69] FAIL JPG → HEIC                       0.1s  KeyError: 'D-Photo.jpg'
+[  43.76] osascript error: 29:91: execution error: Finder got an error: Can’t set item "D-Photo.jpg" of Finder window id 33 to {80, 60}. (-10006)
+[  45.02] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Photo.jpg" of Finder window id 33. (-1728)
+[  45.02] no position for D-Photo.jpg ''
+[  45.34] icon positions (screen): {'D-Report.pdf': (140, 263), 'D-Appendix.pdf': (140, 378), 'D-Letter.docx': (140, 493), 'D-Graphic.png': (140, 608)}
+[  45.91] Traceback (most recent call last):
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 253, in run
+    x, y = icon_center(files[-1], POS)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 163, in icon_center
+    x, y = pos[name]
+           ~~~^^^^^^
+KeyError: 'D-Photo.jpg'
+
+[  45.99] FAIL JPG → PDF                        0.1s  KeyError: 'D-Photo.jpg'
+[  46.07] osascript error: 29:91: execution error: Finder got an error: Can’t set item "D-Photo.jpg" of Finder window id 33 to {80, 60}. (-10006)
+[  47.32] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Photo.jpg" of Finder window id 33. (-1728)
+[  47.32] no position for D-Photo.jpg ''
+[  47.56] icon positions (screen): {'D-Report.pdf': (140, 263), 'D-Appendix.pdf': (140, 378), 'D-Letter.docx': (140, 493), 'D-Graphic.png': (140, 608)}
+[  71.48] Traceback (most recent call last):
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 292, in run
+    raise AssertionError("no output file appeared")
+AssertionError: no output file appeared
+
+[  71.56] FAIL PNG → JPG                       23.5s  AssertionError: no output file appeared
+[  71.67] osascript error: 29:91: execution error: Finder got an error: Can’t set item "D-Photo.jpg" of Finder window id 33 to {80, 60}. (-10006)
+[  71.94] osascript error: 29:94: execution error: Finder got an error: Can’t set item "D-Graphic.png" of Finder window id 33 to {80, 520}. (-10006)
+[  72.93] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Photo.jpg" of Finder window id 33. (-1728)
+[  72.93] no position for D-Photo.jpg ''
+[  73.21] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Graphic.png" of Finder window id 33. (-1728)
+[  73.21] no position for D-Graphic.png ''
+[  73.21] icon positions (screen): {'D-Report.pdf': (140, 263), 'D-Appendix.pdf': (140, 378), 'D-Letter.docx': (140, 493)}
+[  97.24] Traceback (most recent call last):
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 292, in run
+    raise AssertionError("no output file appeared")
+AssertionError: no output file appeared
+
+[  97.36] FAIL PDF → JPG (3 pages)             23.6s  AssertionError: no output file appeared
+[  97.43] osascript error: 29:91: execution error: Finder got an error: Can’t set item "D-Photo.jpg" of Finder window id 33 to {80, 60}. (-10006)
+[  97.50] osascript error: 29:93: execution error: Finder got an error: Can’t set item "D-Report.pdf" of Finder window id 33 to {80, 175}. (-10006)
+[  97.68] osascript error: 29:94: execution error: Finder got an error: Can’t set item "D-Graphic.png" of Finder window id 33 to {80, 520}. (-10006)
+[  98.63] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Photo.jpg" of Finder window id 33. (-1728)
+[  98.63] no position for D-Photo.jpg ''
+[  98.69] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Report.pdf" of Finder window id 33. (-1728)
+[  98.69] no position for D-Report.pdf ''
+[  98.88] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Graphic.png" of Finder window id 33. (-1728)
+[  98.88] no position for D-Graphic.png ''
+[  98.88] icon positions (screen): {'D-Appendix.pdf': (140, 378), 'D-Letter.docx': (140, 493)}
+[  99.45] Traceback (most recent call last):
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 253, in run
+    x, y = icon_center(files[-1], POS)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 163, in icon_center
+    x, y = pos[name]
+           ~~~^^^^^^
+KeyError: 'D-Report.pdf'
+
+[  99.56] FAIL PDF → TXT                        0.1s  KeyError: 'D-Report.pdf'
+[  99.62] osascript error: 29:91: execution error: Finder got an error: Can’t set item "D-Photo.jpg" of Finder window id 33 to {80, 60}. (-10006)
+[  99.69] osascript error: 29:93: execution error: Finder got an error: Can’t set item "D-Report.pdf" of Finder window id 33 to {80, 175}. (-10006)
+[  99.87] osascript error: 29:94: execution error: Finder got an error: Can’t set item "D-Graphic.png" of Finder window id 33 to {80, 520}. (-10006)
+[ 100.88] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Photo.jpg" of Finder window id 33. (-1728)
+[ 100.88] no position for D-Photo.jpg ''
+[ 100.94] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Report.pdf" of Finder window id 33. (-1728)
+[ 100.94] no position for D-Report.pdf ''
+[ 101.21] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Graphic.png" of Finder window id 33. (-1728)
+[ 101.21] no position for D-Graphic.png ''
+[ 101.21] icon positions (screen): {'D-Appendix.pdf': (140, 378), 'D-Letter.docx': (140, 493)}
+[ 124.67] Traceback (most recent call last):
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 292, in run
+    raise AssertionError("no output file appeared")
+AssertionError: no output file appeared
+
+[ 124.76] FAIL DOCX → PDF                      23.0s  AssertionError: no output file appeared
+[ 124.85] osascript error: 29:91: execution error: Finder got an error: Can’t set item "D-Photo.jpg" of Finder window id 33 to {80, 60}. (-10006)
+[ 124.92] osascript error: 29:93: execution error: Finder got an error: Can’t set item "D-Report.pdf" of Finder window id 33 to {80, 175}. (-10006)
+[ 125.06] osascript error: 29:94: execution error: Finder got an error: Can’t set item "D-Letter.docx" of Finder window id 33 to {80, 405}. (-10006)
+[ 125.13] osascript error: 29:94: execution error: Finder got an error: Can’t set item "D-Graphic.png" of Finder window id 33 to {80, 520}. (-10006)
+[ 126.07] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Photo.jpg" of Finder window id 33. (-1728)
+[ 126.07] no position for D-Photo.jpg ''
+[ 126.13] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Report.pdf" of Finder window id 33. (-1728)
+[ 126.13] no position for D-Report.pdf ''
+[ 126.26] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Letter.docx" of Finder window id 33. (-1728)
+[ 126.26] no position for D-Letter.docx ''
+[ 126.32] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Graphic.png" of Finder window id 33. (-1728)
+[ 126.32] no position for D-Graphic.png ''
+[ 126.32] icon positions (screen): {'D-Appendix.pdf': (140, 378)}
+[ 126.85] Traceback (most recent call last):
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 253, in run
+    x, y = icon_center(files[-1], POS)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 163, in icon_center
+    x, y = pos[name]
+           ~~~^^^^^^
+KeyError: 'D-Report.pdf'
+
+[ 126.92] FAIL PDF Split                        0.1s  KeyError: 'D-Report.pdf'
+[ 126.99] osascript error: 29:91: execution error: Finder got an error: Can’t set item "D-Photo.jpg" of Finder window id 33 to {80, 60}. (-10006)
+[ 127.05] osascript error: 29:93: execution error: Finder got an error: Can’t set item "D-Report.pdf" of Finder window id 33 to {80, 175}. (-10006)
+[ 127.17] osascript error: 29:94: execution error: Finder got an error: Can’t set item "D-Letter.docx" of Finder window id 33 to {80, 405}. (-10006)
+[ 127.24] osascript error: 29:94: execution error: Finder got an error: Can’t set item "D-Graphic.png" of Finder window id 33 to {80, 520}. (-10006)
+[ 128.23] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Photo.jpg" of Finder window id 33. (-1728)
+[ 128.23] no position for D-Photo.jpg ''
+[ 128.30] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Report.pdf" of Finder window id 33. (-1728)
+[ 128.30] no position for D-Report.pdf ''
+[ 128.42] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Letter.docx" of Finder window id 33. (-1728)
+[ 128.42] no position for D-Letter.docx ''
+[ 128.49] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Graphic.png" of Finder window id 33. (-1728)
+[ 128.49] no position for D-Graphic.png ''
+[ 128.49] icon positions (screen): {'D-Appendix.pdf': (140, 378)}
+[ 129.01] Traceback (most recent call last):
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 253, in run
+    x, y = icon_center(files[-1], POS)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 163, in icon_center
+    x, y = pos[name]
+           ~~~^^^^^^
+KeyError: 'D-Report.pdf'
+
+[ 129.09] FAIL PDF Rotate                       0.1s  KeyError: 'D-Report.pdf'
+[ 129.16] osascript error: 29:91: execution error: Finder got an error: Can’t set item "D-Photo.jpg" of Finder window id 33 to {80, 60}. (-10006)
+[ 129.22] osascript error: 29:93: execution error: Finder got an error: Can’t set item "D-Report.pdf" of Finder window id 33 to {80, 175}. (-10006)
+[ 129.35] osascript error: 29:94: execution error: Finder got an error: Can’t set item "D-Letter.docx" of Finder window id 33 to {80, 405}. (-10006)
+[ 129.41] osascript error: 29:94: execution error: Finder got an error: Can’t set item "D-Graphic.png" of Finder window id 33 to {80, 520}. (-10006)
+[ 130.41] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Photo.jpg" of Finder window id 33. (-1728)
+[ 130.41] no position for D-Photo.jpg ''
+[ 130.48] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Report.pdf" of Finder window id 33. (-1728)
+[ 130.48] no position for D-Report.pdf ''
+[ 130.60] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Letter.docx" of Finder window id 33. (-1728)
+[ 130.60] no position for D-Letter.docx ''
+[ 130.67] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Graphic.png" of Finder window id 33. (-1728)
+[ 130.67] no position for D-Graphic.png ''
+[ 130.67] icon positions (screen): {'D-Appendix.pdf': (140, 378)}
+[ 131.24] Traceback (most recent call last):
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 253, in run
+    x, y = icon_center(files[-1], POS)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 163, in icon_center
+    x, y = pos[name]
+           ~~~^^^^^^
+KeyError: 'D-Report.pdf'
+
+[ 131.32] FAIL PDF Compress                     0.1s  KeyError: 'D-Report.pdf'
+[ 131.38] osascript error: 29:91: execution error: Finder got an error: Can’t set item "D-Photo.jpg" of Finder window id 33 to {80, 60}. (-10006)
+[ 131.45] osascript error: 29:93: execution error: Finder got an error: Can’t set item "D-Report.pdf" of Finder window id 33 to {80, 175}. (-10006)
+[ 131.57] osascript error: 29:94: execution error: Finder got an error: Can’t set item "D-Letter.docx" of Finder window id 33 to {80, 405}. (-10006)
+[ 131.64] osascript error: 29:94: execution error: Finder got an error: Can’t set item "D-Graphic.png" of Finder window id 33 to {80, 520}. (-10006)
+[ 132.58] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Photo.jpg" of Finder window id 33. (-1728)
+[ 132.58] no position for D-Photo.jpg ''
+[ 132.64] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Report.pdf" of Finder window id 33. (-1728)
+[ 132.64] no position for D-Report.pdf ''
+[ 132.77] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Letter.docx" of Finder window id 33. (-1728)
+[ 132.77] no position for D-Letter.docx ''
+[ 132.84] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Graphic.png" of Finder window id 33. (-1728)
+[ 132.84] no position for D-Graphic.png ''
+[ 132.84] icon positions (screen): {'D-Appendix.pdf': (140, 378)}
+[ 134.97] Traceback (most recent call last):
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 248, in run
+    x, y = icon_center(f, POS)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 163, in icon_center
+    x, y = pos[name]
+           ~~~^^^^^^
+KeyError: 'D-Report.pdf'
+
+[ 135.07] FAIL Merge 2 PDFs                     1.7s  KeyError: 'D-Report.pdf'
+[ 135.13] osascript error: 29:91: execution error: Finder got an error: Can’t set item "D-Photo.jpg" of Finder window id 33 to {80, 60}. (-10006)
+[ 135.20] osascript error: 29:93: execution error: Finder got an error: Can’t set item "D-Report.pdf" of Finder window id 33 to {80, 175}. (-10006)
+[ 135.33] osascript error: 29:94: execution error: Finder got an error: Can’t set item "D-Letter.docx" of Finder window id 33 to {80, 405}. (-10006)
+[ 135.39] osascript error: 29:94: execution error: Finder got an error: Can’t set item "D-Graphic.png" of Finder window id 33 to {80, 520}. (-10006)
+[ 136.38] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Photo.jpg" of Finder window id 33. (-1728)
+[ 136.38] no position for D-Photo.jpg ''
+[ 136.44] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Report.pdf" of Finder window id 33. (-1728)
+[ 136.44] no position for D-Report.pdf ''
+[ 136.57] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Letter.docx" of Finder window id 33. (-1728)
+[ 136.57] no position for D-Letter.docx ''
+[ 136.63] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Graphic.png" of Finder window id 33. (-1728)
+[ 136.63] no position for D-Graphic.png ''
+[ 136.63] icon positions (screen): {'D-Appendix.pdf': (140, 378)}
+[ 137.21] Traceback (most recent call last):
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 253, in run
+    x, y = icon_center(files[-1], POS)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 163, in icon_center
+    x, y = pos[name]
+           ~~~^^^^^^
+KeyError: 'D-Photo.jpg'
+
+[ 137.29] FAIL Compress (window, Enter)         0.1s  KeyError: 'D-Photo.jpg'
+[ 137.36] osascript error: 29:91: execution error: Finder got an error: Can’t set item "D-Photo.jpg" of Finder window id 33 to {80, 60}. (-10006)
+[ 137.43] osascript error: 29:93: execution error: Finder got an error: Can’t set item "D-Report.pdf" of Finder window id 33 to {80, 175}. (-10006)
+[ 137.56] osascript error: 29:94: execution error: Finder got an error: Can’t set item "D-Letter.docx" of Finder window id 33 to {80, 405}. (-10006)
+[ 137.63] osascript error: 29:94: execution error: Finder got an error: Can’t set item "D-Graphic.png" of Finder window id 33 to {80, 520}. (-10006)
+[ 138.57] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Photo.jpg" of Finder window id 33. (-1728)
+[ 138.57] no position for D-Photo.jpg ''
+[ 138.63] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Report.pdf" of Finder window id 33. (-1728)
+[ 138.63] no position for D-Report.pdf ''
+[ 138.75] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Letter.docx" of Finder window id 33. (-1728)
+[ 138.75] no position for D-Letter.docx ''
+[ 138.81] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Graphic.png" of Finder window id 33. (-1728)
+[ 138.81] no position for D-Graphic.png ''
+[ 138.81] icon positions (screen): {'D-Appendix.pdf': (140, 378)}
+[ 139.32] Traceback (most recent call last):
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 253, in run
+    x, y = icon_center(files[-1], POS)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 163, in icon_center
+    x, y = pos[name]
+           ~~~^^^^^^
+KeyError: 'D-Photo.jpg'
+
+[ 139.40] FAIL Resize 50% (window, Enter)       0.1s  KeyError: 'D-Photo.jpg'
+[ 139.47] osascript error: 29:91: execution error: Finder got an error: Can’t set item "D-Photo.jpg" of Finder window id 33 to {80, 60}. (-10006)
+[ 139.53] osascript error: 29:93: execution error: Finder got an error: Can’t set item "D-Report.pdf" of Finder window id 33 to {80, 175}. (-10006)
+[ 139.66] osascript error: 29:94: execution error: Finder got an error: Can’t set item "D-Letter.docx" of Finder window id 33 to {80, 405}. (-10006)
+[ 139.72] osascript error: 29:94: execution error: Finder got an error: Can’t set item "D-Graphic.png" of Finder window id 33 to {80, 520}. (-10006)
+[ 140.67] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Photo.jpg" of Finder window id 33. (-1728)
+[ 140.67] no position for D-Photo.jpg ''
+[ 140.73] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Report.pdf" of Finder window id 33. (-1728)
+[ 140.73] no position for D-Report.pdf ''
+[ 140.85] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Letter.docx" of Finder window id 33. (-1728)
+[ 140.85] no position for D-Letter.docx ''
+[ 140.91] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Graphic.png" of Finder window id 33. (-1728)
+[ 140.91] no position for D-Graphic.png ''
+[ 140.91] icon positions (screen): {'D-Appendix.pdf': (140, 378)}
+[ 141.47] Traceback (most recent call last):
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 253, in run
+    x, y = icon_center(files[-1], POS)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 163, in icon_center
+    x, y = pos[name]
+           ~~~^^^^^^
+KeyError: 'D-Graphic.png'
+
+[ 141.55] FAIL Add BG (window, Enter)           0.1s  KeyError: 'D-Graphic.png'
+[ 141.62] osascript error: 29:91: execution error: Finder got an error: Can’t set item "D-Photo.jpg" of Finder window id 33 to {80, 60}. (-10006)
+[ 141.68] osascript error: 29:93: execution error: Finder got an error: Can’t set item "D-Report.pdf" of Finder window id 33 to {80, 175}. (-10006)
+[ 141.81] osascript error: 29:94: execution error: Finder got an error: Can’t set item "D-Letter.docx" of Finder window id 33 to {80, 405}. (-10006)
+[ 141.88] osascript error: 29:94: execution error: Finder got an error: Can’t set item "D-Graphic.png" of Finder window id 33 to {80, 520}. (-10006)
+[ 142.82] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Photo.jpg" of Finder window id 33. (-1728)
+[ 142.82] no position for D-Photo.jpg ''
+[ 142.89] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Report.pdf" of Finder window id 33. (-1728)
+[ 142.89] no position for D-Report.pdf ''
+[ 143.03] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Letter.docx" of Finder window id 33. (-1728)
+[ 143.03] no position for D-Letter.docx ''
+[ 143.10] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Graphic.png" of Finder window id 33. (-1728)
+[ 143.10] no position for D-Graphic.png ''
+[ 143.10] icon positions (screen): {'D-Appendix.pdf': (140, 378)}
+[ 143.66] Traceback (most recent call last):
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 253, in run
+    x, y = icon_center(files[-1], POS)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/runner/work/DragShift/DragShift/demo/e2e_mac.py", line 163, in icon_center
+    x, y = pos[name]
+           ~~~^^^^^^
+KeyError: 'D-Photo.jpg'
+
+[ 143.73] FAIL Metadata: remove all (Enter)     0.1s  KeyError: 'D-Photo.jpg'
+[ 143.81] osascript error: 29:91: execution error: Finder got an error: Can’t set item "D-Photo.jpg" of Finder window id 33 to {80, 60}. (-10006)
+[ 143.89] osascript error: 29:93: execution error: Finder got an error: Can’t set item "D-Report.pdf" of Finder window id 33 to {80, 175}. (-10006)
+[ 144.04] osascript error: 29:94: execution error: Finder got an error: Can’t set item "D-Letter.docx" of Finder window id 33 to {80, 405}. (-10006)
+[ 144.11] osascript error: 29:94: execution error: Finder got an error: Can’t set item "D-Graphic.png" of Finder window id 33 to {80, 520}. (-10006)
+[ 145.11] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Photo.jpg" of Finder window id 33. (-1728)
+[ 145.11] no position for D-Photo.jpg ''
+[ 145.18] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Report.pdf" of Finder window id 33. (-1728)
+[ 145.18] no position for D-Report.pdf ''
+[ 145.31] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Letter.docx" of Finder window id 33. (-1728)
+[ 145.31] no position for D-Letter.docx ''
+[ 145.38] osascript error: 33:41: execution error: Finder got an error: Can’t get item "D-Graphic.png" of Finder window id 33. (-1728)
+[ 145.38] no position for D-Graphic.png ''
+[ 145.38] icon positions (screen): {'D-Appendix.pdf': (140, 378)}
+[ 146.42] DONE 0/17
