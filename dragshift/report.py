@@ -81,7 +81,8 @@ def summarize(action: str, srcs: list, outs: list, extra: str = "") -> Result:
     if action == "tool:Pack":
         return Result("Archive created", f"{o0.name} · {human_size(after)}", outs, srcs)
     if action == 'tool:Telegram emoji':
-        return Result('Telegram emoji created',f'{o0.name} · WebM / VP9 · 100×100 · {human_size(after)}',outs,srcs)
+        format_name = 'WebP' if o0.suffix.lower() == '.webp' else 'WebM / VP9'
+        return Result('Telegram emoji created', f'{o0.name} · {format_name} · 100×100 · {human_size(after)}', outs, srcs)
     if action == 'tool:Distort':
         return Result('Distortion ready',f'{o0.name} · {human_size(after)}'+(f' · {extra}' if extra else ''),outs,srcs)
 

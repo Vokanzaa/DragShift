@@ -1,4 +1,4 @@
-"""Telegram video emoji profile, verified before atomic output publication.
+"""Export Telegram custom emoji as a static WebP or VP9 video.
 
 Official requirements: https://core.telegram.org/stickers/webm-vp9-encoding
 100×100, WebM/VP9, no audio stream, at most 3 seconds / 30 fps / 256 KB.
@@ -10,6 +10,44 @@ from . import video
 from .util import UserError
 
 MAX_BYTES=256_000
+
+
+def emoji_format(kind, suffix, animated=False):
+    if kind == 'video' or kind == 'image' and suffix.lower().lstrip('.') == 'gif':
+        return 'WEBM'
+    if kind == 'image' and not animated:
+        return 'WEBP'
+    return None
+
+
+def square_box(size, framing):
+    """Map relative position and side length to an in-bounds pixel square."""
+    horizontal, vertical, fraction = framing
+    if (not all(math.isfinite(value) for value in framing)
+            or not 0 <= horizontal <= 1 or not 0 <= vertical <= 1
+            or not 0 < fraction <= 1):
+        raise UserError('Choose a square inside the image.')
+    width, height = size
+    side = max(1, round(min(size) * fraction))
+    left = round((width - side) * horizontal)
+    top = round((height - side) * vertical)
+    return left, top, left + side, top + side
+
+
+def export_static_emoji(src, framing=(.5, .5, 1.)):
+    from PIL.Image import Resampling
+    from .animation import is_animated
+    from .convert import open_image
+
+    video.check_cancel()
+    if is_animated(src):
+        raise UserError('Choose a still image for a static Telegram emoji.')
+    with open_image(src) as image:
+        box = square_box(image.size, framing)
+        emoji = image.crop(box).convert('RGBA').resize((100, 100), Resampling.LANCZOS)
+    with video.export_path(src, 'Telegram emoji', '.webp') as (temporary, outputs):
+        emoji.save(temporary, 'WEBP', lossless=True)
+    return outputs
 
 
 def validate_export(path):

@@ -292,8 +292,6 @@ class DragShiftApp(QObject):
                 hint=f'{len(same)} images → 1 animated GIF'
             convert_items.append(Item(t, key=f"convert:{t}", hint=hint))
         rings: dict[str, list[Item]] = {"Convert": convert_items}
-        if cat == 'video' or cat == 'image' and ext.lower() == '.gif':
-            convert_items.append(Item('TG Emoji', key='tool:Telegram emoji', hint='100×100 · VP9 · up to 3 s · ≤256 KB'))
         if cat == "image":
             rings["Tools"] = [Item(n, GLYPHS[n], key=f"tool:{n}", hint=HINTS[n]) for n in IMAGE_TOOLS]
         elif cat == "pdf":
@@ -313,9 +311,14 @@ class DragShiftApp(QObject):
             rings["Tools"] = [Item("Extract", "⇩", key="tool:Extract archive", hint="Unpack to a new folder"),
                                Item("Contents", "ⓘ", key="tool:Contents", hint="View files inside")]
         if cat in ('image','video'):
-            from . import animation
+            from . import animation, telegram
             try:animated=cat=='video' or animation.is_animated(paths[0])
             except (OSError,ValueError):animated=Path(paths[0]).suffix.lower()=='.gif'
+            emoji_format = telegram.emoji_format(cat, ext, animated)
+            if emoji_format:
+                hint = ('100×100 · WebP · square crop' if emoji_format == 'WEBP'
+                        else '100×100 · VP9 · up to 3 s · ≤256 KB')
+                convert_items.append(Item('TG Emoji', key='tool:Telegram emoji', hint=hint))
             if animated:
                 rings.setdefault('Tools',[]).append(Item('Reverse','↶',key='tool:Reverse',hint='Reverse all frames and their timing'))
         rings.setdefault("Tools", []).append(pack)
@@ -348,8 +351,11 @@ class DragShiftApp(QObject):
             self.open_window(DistortionWindow(paths,self.notify))
             return
         if name == 'Telegram emoji':
-            from .video_tools import TelegramEmojiWindow
-            self.open_window(TelegramEmojiWindow(paths, self.notify))
+            from .telegram_tools import emoji_window
+            try:
+                self.open_window(emoji_window(paths, self.notify))
+            except Exception as error:
+                self.toasts.error(name, friendly_error(error))
             return
         if kind == "convert":
             if cat=='image' and name=='GIF' and len(paths)>1:

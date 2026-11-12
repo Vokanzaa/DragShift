@@ -1119,5 +1119,14 @@
   "Remove rule": "Удалить правило",
   "Batch naming rules · preview · undo": "Правила имён · предпросмотр · отмена",
   "Reverse all frames and their timing": "Обратить все кадры вместе с длительностью",
-  "Reversing frames…": "Обращение порядка кадров…"
+  "Reversing frames…": "Обращение порядка кадров…",
+  "TG Emoji": "TG-эмодзи",
+  "100×100 · WebP · square crop": "100×100 · WebP · квадратный кроп",
+  "Choose a square inside the image.": "Выберите квадрат внутри изображения.",
+  "Choose a still image for a static Telegram emoji.": "Выберите обычное изображение для статического эмодзи Telegram.",
+  "Drag the square to move it. Pull a handle to resize it.": "Перетащите квадрат. Потяните за угол или край, чтобы изменить размер.",
+  "Square size": "Размер квадрата",
+  "Static emoji · WebP · 100×100 · transparency preserved": "Статическое эмодзи · WebP · 100×100 · с прозрачностью",
+  "The same relative framing is applied to every selected image.": "Выбранные положение и размер квадрата применяются ко всем изображениям.",
+  "Select still images separately from GIFs and videos.": "Выберите обычные изображения отдельно от GIF и видео."
 }
