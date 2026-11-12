@@ -1,0 +1,1 @@
+requestActivate() called for  QWidgetWindow(0x2eba7dc0, name="RadialMenuClassWindow")  which has Qt::WindowDoesNotAcceptFocus set.
