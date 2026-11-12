@@ -1,0 +1,10 @@
+
+==== DragShift 1.1.0+files.16 started 2026-11-12 00:21:36 ====
+Windows fatal exception: code 0x8001010d
+
+Current thread 0x00002554 (most recent call first):
+  File "D:\a\DragShift\DragShift\dragshift\app.py", line 649 in main
+  File "D:\a\DragShift\DragShift\dragshift\__main__.py", line 10 in <module>
+  File "<frozen runpy>", line 88 in _run_code
+  File "<frozen runpy>", line 198 in _run_module_as_main
+IPC: 1 file(s) handed over
